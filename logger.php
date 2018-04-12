@@ -34,9 +34,16 @@ class echologger {
 	 */
 	public function say($logme) {
 		if (is_array($logme)) {
-			foreach ($logme as $line) {
+			foreach ($logme as $ind=>$line) {
 				//looks dumb with the time. Otherwise I'd recurse here...
-				fwrite($this->file, "\t$line\n");
+				$writeme = '';
+				if (is_numeric($ind)) {	//swallow it
+					$writeme = "\t$line\n";
+				} else {
+					$writeme = "\t$ind = $line\n";
+				}
+				fwrite($this->file, $writeme);
+				echo $writeme;
 			}
 			return;
 		}

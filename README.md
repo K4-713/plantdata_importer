@@ -26,6 +26,7 @@ property mappings for all the columns, and import the data accordingly.
 
 ## Usage
 See above: Don't.
+
 If you have to: run import.php with a filename for the TSV you want to import, 
 and an integer number of items you want to import on this run. This will 
 eventually assume you have a valid .tsv file in the ./files directory. Logs for 
