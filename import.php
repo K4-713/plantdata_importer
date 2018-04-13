@@ -80,9 +80,10 @@ if (isset($dry_run) && $dry_run) {
 
 /**
  * What I will need to be able do:
- * Check to see if an item exists by label in a specific language. Will help to 
- *	avoid double-importing.
+ * Check to see if an item exists by label in a specific language: 
+ *		Done with getWikibaseEntsByLabel() 
  * look up a property in much the same way
+ *		Done exactly the same way.
  * Get specific property values on specific items
  * Read in a tsv
  * Add a new wikibase item
@@ -93,25 +94,8 @@ if (isset($dry_run) && $dry_run) {
 require_once( 'scrappy_searcher.php' );
 
 //testConnection();
-
-
-//I don't really mind this, because it's readable...
-$test_search = getConfig('test_search');
-$test_language = getConfig('test_language');
-
-$search_for = $test_search; //from config
-$item = getWikibaseItemsByLabel($test_search, $test_language, true);
-
-if($item){
-	if (is_array($item)){
-		$log->say("Returned multiple results for '$search_for' in $test_language");
-		$log->say($item);
-	} else {
-		$log->say("$item is an exact match for '$search_for' in $test_language");
-	}
-} else {
-	$log->say("Didn't find an exact match for '$search_for' in $test_language");
-}
+testItemSearchByLabel();
+testPropertySearchByLabel();
 
 $log->say("Done for now...");
 
@@ -212,7 +196,46 @@ function testConnection(){
 	// Wikibase\DataModel\Term\TermList, so...
 	$log->say($item->getLabels()->toTextArray());
 	$log->say($item->getDescriptions()->toTextArray());
+}
 
+function testPropertySearchByLabel(){
+	global $log;
+	//I don't really mind this, because it's readable...
+	$test_property_search = getConfig('test_property_search');
+	$test_language = getConfig('test_language');
+
+	$item = getWikibaseEntsByLabel($test_property_search, $test_language, 'property', true);
+
+	if($item){
+		if (is_array($item)){
+			$log->say("Returned multiple results for '$test_property_search' in $test_language");
+			$log->say($item);
+		} else {
+			$log->say("$item is an exact match for '$test_property_search' in $test_language");
+		}
+	} else {
+		$log->say("Didn't find an exact match for '$test_property_search' in $test_language");
+	}
+}
+
+function testItemSearchByLabel(){
+	global $log;
+	//I don't really mind this, because it's readable...
+	$test_item_search = getConfig('test_item_search');
+	$test_language = getConfig('test_language');
+
+	$item = getWikibaseEntsByLabel($test_item_search, $test_language, 'item', true);
+
+	if($item){
+		if (is_array($item)){
+			$log->say("Returned multiple results for '$test_item_search' in $test_language");
+			$log->say($item);
+		} else {
+			$log->say("$item is an exact match for '$test_item_search' in $test_language");
+		}
+	} else {
+		$log->say("Didn't find an exact match for '$test_item_search' in $test_language");
+	}
 }
 
 //Tired of globals, but who needs 'em.

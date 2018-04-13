@@ -27,8 +27,11 @@ $wikibase_username = 'username';
 $wikibase_password = 'password';
 
 //known items in the specified wikibase instance to help test the search and 
-//retrieval functionality
+//retrieval functionality.
+//These should be changed to match things that you actually have in your 
+//instance.
 $test_item = 'Q4';
-$test_search = 'Uncle Ghost';
+$test_item_search = 'Uncle Ghost';
+$test_property_search = 'species';
 $test_language = 'en';
 

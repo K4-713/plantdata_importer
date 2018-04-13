@@ -31,15 +31,18 @@
  * Returns an array for multiple matches, a string for a single match, and false 
  * for not matches
  * @global type $log
- * @param type $text The search term
- * @param type $language Langauge code to match on
- * @param type $exact_match Whether or not you only want exact matches. Default false.
+ * @param string $text The search term
+ * @param string $language Langauge code to match on
+ * @param string $type Type of entity to return. item|property, defaults to item
+ * @param boolean $exact_match Whether or not you only want exact matches. 
+ * Default false. NOTE: Searches seem to work from the start of the string, and 
+ * won't necessarily match from the middle or end...
  * @return boolean|string|array
  */
-function getWikibaseItemsByLabel( $text, $language, $exact_match = false ){
+function getWikibaseEntsByLabel( $text, $language, $type = 'item', $exact_match = false ){
 	global $log;
 	
-	$log->say("Looking for existing item labeled '$text' in $language");
+	$log->say("Looking for existing $type labeled '$text' in $language");
 	$params = array(
 		'action' => 'wbsearchentities',
 		'format' => 'json',
@@ -47,9 +50,9 @@ function getWikibaseItemsByLabel( $text, $language, $exact_match = false ){
 		'continue' => '0',
 		'language' => $language,
 		// 'uselang' => 'en', //seems to be superfluous
-		'strictlanguage' => true,
+		'strictlanguage' => true, //without this, you'll get fallback language results.
 		'search' => $text,
-		'type' => 'item',	//type = property works for searches too.
+		'type' => $type,	//type = property works for searches too.
 	);
 	
 	//then curl it and see what happens.
@@ -68,7 +71,7 @@ function getWikibaseItemsByLabel( $text, $language, $exact_match = false ){
 	if($exact_match){
 		foreach ( $data['search'] as $ind => $arr ){
 			if ( strtoupper($text) != strtoupper($arr['label']) ){
-				unset($data['search']['ind']);
+				unset($data['search'][$ind]);
 			}
 		}
 	}
