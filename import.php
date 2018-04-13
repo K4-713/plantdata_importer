@@ -27,7 +27,6 @@ use Mediawiki\Api\ApiUser;
 use Wikibase\Api\WikibaseFactory;
 use Wikibase\DataModel\Entity\ItemId;
 
-
 //local globals. Fight me.
 $mw_api = '';
 $wikibase_factory = '';
@@ -64,10 +63,13 @@ if (!empty($_SERVER['argv'][3])) {
  * Once I have all this worked out, I'll restructure a bit. For now I don't care.
  */
 
-
-//Both log and echo what we're doing
+// The echologger class will both echo and log what we're doing out here, 
+// for easier auditing. Should be able to handle a variety of inputs.
+// set that up here:
 require_once('logger.php');
 $log = new echologger();
+
+//...and use it.
 $log->say("Running the importer on $filename, for $run_size entries.");
 
 if (isset($dry_run) && $dry_run) {
@@ -76,7 +78,40 @@ if (isset($dry_run) && $dry_run) {
 	$log->say("THIS IS REAL - not a dry run! Data may be changed.");
 }
 
-testConnection();
+/**
+ * What I will need to be able do:
+ * Check to see if an item exists by label in a specific language. Will help to 
+ *	avoid double-importing.
+ * look up a property in much the same way
+ * Get specific property values on specific items
+ * Read in a tsv
+ * Add a new wikibase item
+ * Find an item that already exists by label in a specific language, and add a property
+ */
+
+//...I give up.
+require_once( 'scrappy_searcher.php' );
+
+//testConnection();
+
+
+//I don't really mind this, because it's readable...
+$test_search = getConfig('test_search');
+$test_language = getConfig('test_language');
+
+$search_for = $test_search; //from config
+$item = getWikibaseItemsByLabel($test_search, $test_language, true);
+
+if($item){
+	if (is_array($item)){
+		$log->say("Returned multiple results for '$search_for' in $test_language");
+		$log->say($item);
+	} else {
+		$log->say("$item is an exact match for '$search_for' in $test_language");
+	}
+} else {
+	$log->say("Didn't find an exact match for '$search_for' in $test_language");
+}
 
 $log->say("Done for now...");
 
@@ -94,9 +129,8 @@ function loginToMediawiki(){
 
 	try {
 		//pull in the config settings and make the connections
-		require_once('config.php');
-		$mw_api = new MediawikiApi($wikibase_api_url);
-		$mw_api->login(new ApiUser($wikibase_username, $wikibase_password));
+		$mw_api = new MediawikiApi(getConfig('wikibase_api_url'));
+		$mw_api->login(new ApiUser(getConfig('wikibase_username'), getConfig('wikibase_password')));
 	} catch (Exception $e) {
 		$log->say('Caught ErrorException: ' . $e->getMessage());
 		$log->lastError();
@@ -161,10 +195,10 @@ function testConnection(){
 
 	//itemID is a what?
 	// /wikibase-api/vendor/wikibase/data-model/src/Entity/ItemId.php
-
-	$log->say("Testing the connection by looking up the labels and descriptions of Q4");
+	$test_item = getConfig('test_item');
+	$log->say("Testing the connection by looking up the labels and descriptions of $test_item");
 	
-	$itemId = new ItemId('Q4');
+	$itemId = new ItemId($test_item);
 	$itemLookup = $wikibase_factory->newItemLookup();
 	$termLookup = $wikibase_factory->newTermLookup();
 
@@ -172,7 +206,7 @@ function testConnection(){
 	// Wikibase\DataModel\Entity\Item
 	// /wikibase-api/vendor/wikibase/data-model/src/Entity/Item.php
 	$item = $itemLookup->getItemForId($itemId);
-	$enLabel = $termLookup->getLabel($itemId, 'en');
+	$enLabel = $termLookup->getLabel($itemId, getConfig('test_language'));
 
 	//$item->getDescriptions() gives me an object of type TermList
 	// Wikibase\DataModel\Term\TermList, so...
@@ -181,16 +215,8 @@ function testConnection(){
 
 }
 
-
-
-/**
- * What I want to do:
- * Check to see if an item exists by label in a specific language.
- * Read in a tsv
- * write an item
- * look up a property
- * write a property to an item.
- */
-
-
-
+//Tired of globals, but who needs 'em.
+function getConfig($varname){
+	require('config.php');
+	return $$varname;
+}

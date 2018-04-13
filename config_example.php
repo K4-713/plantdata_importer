@@ -21,6 +21,14 @@
 //URL of the API for the wikibase install you want to import data to
 $wikibase_api_url = 'http://wikibase.mysite.com/w/api.php';
 
-//valid user creds for the account making the edits on the target wikibase install
+//valid user creds for the account making the edits on the target wikibase 
+//install
 $wikibase_username = 'username';
 $wikibase_password = 'password';
+
+//known items in the specified wikibase instance to help test the search and 
+//retrieval functionality
+$test_item = 'Q4';
+$test_search = 'Uncle Ghost';
+$test_language = 'en';
+

@@ -34,16 +34,23 @@ class echologger {
 	 */
 	public function say($logme) {
 		if (is_array($logme)) {
-			foreach ($logme as $ind=>$line) {
-				//looks dumb with the time. Otherwise I'd recurse here...
-				$writeme = '';
-				if (is_numeric($ind)) {	//swallow it
-					$writeme = "\t$line\n";
-				} else {
-					$writeme = "\t$ind = $line\n";
-				}
-				fwrite($this->file, $writeme);
-				echo $writeme;
+			if ($this->is_3d_array($logme)){
+				//this line will go both to the file and out to the client.
+				fwrite( $this->getTime() . ": " . $this->file, print_r( $logme, true ));
+				return;
+				
+			} else { //just 2d. Phew.
+				foreach ($logme as $ind=>$line) {
+					//looks dumb with the time. Otherwise I'd recurse here...
+					$writeme = '';
+					if (is_numeric($ind)) {	//swallow it
+						$writeme = "\t$line\n";
+					} else {
+						$writeme = "\t$ind = $line\n";
+					}
+					fwrite($this->file, $writeme);
+					echo $writeme;
+				}	
 			}
 			return;
 		}
@@ -83,6 +90,16 @@ class echologger {
 		$out[2] = $last_error['file'] . ", line " . $last_error['line'];
 		$this->say($out);
 	}
+	
+	
+	public function is_3d_array( $checkme ){
+		foreach ( $checkme as $thing => $stuff ){
+			if (is_array($stuff)) {
+				return true;
+			}			
+		}
+		return false;
+	}
 
 	/*
 	 * Close the log file
@@ -93,5 +110,6 @@ class echologger {
 		fwrite($this->file, "$time: Exiting.");
 		fclose($this->file);
 	}
+	
 
 }
