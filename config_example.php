@@ -21,6 +21,9 @@
 //URL of the API for the wikibase install you want to import data to
 $wikibase_api_url = 'http://wikibase.mysite.com/w/api.php';
 
+//Base URL for retrieving EntityData turtle files
+$wikibase_entitydata_url = 'http://wikibase.mysite.com/wiki/Special:EntityData/';
+
 //valid user creds for the account making the edits on the target wikibase 
 //install
 $wikibase_username = 'username';

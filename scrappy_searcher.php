@@ -24,10 +24,12 @@
  * this is significantly easier.
  */
 
+require_once 'vendor/autoload.php';  //grr composer. I didn't want to have to, but here we are.
 
 /**
- * Gets an item ID (Q number) for items with a label in $language that match 
- * $text. To return exact matches only, set $exact_match to true.
+ * Gets an item or property ID (Q of P number) for items with a label in 
+ * $language that match $text. To return exact matches only, set 
+ * $exact_match to true.
  * Returns an array for multiple matches, a string for a single match, and false 
  * for not matches
  * @global type $log
@@ -57,7 +59,7 @@ function getWikibaseEntsByLabel( $text, $language, $type = 'item', $exact_match 
 	
 	//then curl it and see what happens.
 	
-	$json = curl_transaction($params);
+	$json = curl_transaction(getConfig('wikibase_api_url'), $params);
 	
 	if(!$json){
 		$log->say("Something went wrong with the curl response.");
@@ -100,21 +102,69 @@ function getWikibaseEntsByLabel( $text, $language, $type = 'item', $exact_match 
 }
 
 
+//fetch and try to parse the turtle file
+function fetchObject($id){
+	global $log;
+	//like this:
+	//http://wikibase.plantdata.io/wiki/Special:EntityData/Q4.ttl
+	$url = getConfig('wikibase_entitydata_url'). $id . ".ttl";
+	
+	$log->say("Fetching $id");
+
+	$rdf = new EasyRdf_Graph($url);
+	$rdf->load();
+	$rdf->countTriples();
+	
+	//this works
+	$log->say($rdf->countTriples() . " triples loaded");
+	
+	//we are looking for wtd:P2 in this file. 
+	//this works: 
+//	$gotten = $rdf->all('http://wikibase.plantdata.io/entity/Q4', 'rdfs:label');
+	//this does not.
+//	$gotten = $rdf->all('http://wikibase.plantdata.io/entity/Q4', 'wdt:P2');
+
+	//check out the text dump for some clues.
+	//$gotten = $rdf->dump('text');
+	//$log->say("I got the following:");
+	//$log->say($gotten);
+	
+	//Until I can figure out what it wants, I'm going cheap.
+	//At least I am thematically consistent.
+	$arrgh =  $rdf->toRdfPhp(); //say, this works. But it's totally cheap and ugly and I hate it.
+
+	//this should maybe be another config var, as the URIs are arbitrary.
+	$entityKey = 'http://wikibase.plantdata.io/entity/' . $id;
+	//and clearly you have gone too far in this function. Mess ahoy.
+	$propertyKey = 'http://wikibase.plantdata.io/prop/direct/' . 'P2';
+	$arrgh = $arrgh[$entityKey][$propertyKey]; //if it exists, yada yada
+	
+	$ret = array();
+	foreach($arrgh as $statements => $valueArrgh){
+		array_push($ret, $valueArrgh['value']);
+	}
+	
+	$log->say("Here are the property values we found for P2 statement on $id"); //facepalm
+	$log->say($ret);
+	//now clean up after yourself before someone sees this.
+}
+
 /**
- * uses cURL to contact your wikibase instance. Turns ths associative array in 
- * $data into the querystring and gets. Returns a response or false if it failed.
+ * uses cURL to contact your wikibase instance. If present, turns the 
+ * associative array in $data into the querystring and gets from the URL you 
+ * supply. Returns a response or false if it failed.
  * 
- * Largely copied from myself via DonationInterface, and simplified, 
+ * Largely copied from myself via DonationInterface, and simplified. 
  * 
  * @global type $log
- * @param array $data Associative array of the elements to send in the
- *  querystring.
+ * @param string $url The URL to contact
+ * @param array|false $data Associative array of the elements to send in the
+ *  querystring, or false if you don't need it.
  * @return string|false
  */
-function curl_transaction( $data ) {
+function curl_transaction( $url, $data = false ) {
 	global $log;
 	
-	// Basic variable init
 	$retval = false;    // By default return that we failed
 
 	// Initialize cURL
@@ -128,10 +178,14 @@ function curl_transaction( $data ) {
 	);
 
 	//We're not posting, so turn that $data array into a querystring...
-	$querystring = http_build_query( $data );
+	if($data){
+		$querystring = http_build_query( $data );
+		$url .= '?' . $querystring;
+	}
+	
 	
 	$curl_opts = array(
-		CURLOPT_URL => getConfig('wikibase_api_url') . '?' . $querystring,
+		CURLOPT_URL => $url,
 		CURLOPT_USERAGENT => 'plantdata-importer 0.2', //i guess
 		//CURLOPT_HEADER => 0,
 		CURLOPT_RETURNTRANSFER => 1,

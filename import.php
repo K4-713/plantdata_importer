@@ -85,6 +85,7 @@ if (isset($dry_run) && $dry_run) {
  * look up a property in much the same way
  *		Done exactly the same way.
  * Get specific property values on specific items
+ *		Ehh, just use the... entity... thingy.
  * Read in a tsv
  * Add a new wikibase item
  * Find an item that already exists by label in a specific language, and add a property
@@ -93,9 +94,7 @@ if (isset($dry_run) && $dry_run) {
 //...I give up.
 require_once( 'scrappy_searcher.php' );
 
-//testConnection();
-testItemSearchByLabel();
-testPropertySearchByLabel();
+testEverything();
 
 $log->say("Done for now...");
 
@@ -160,6 +159,26 @@ function setupWBFactory(){
 	/**
 	 * End copied example code
 	 */
+}
+
+//yeah, maybe this will stay in. Potentially useful for everyone.
+function testEverything(){
+	testConnection();
+	testItemSearchByLabel();
+	testPropertySearchByLabel();
+	testItemPropertyLookup();	
+}
+
+function testItemPropertyLookup(){
+	global $log;
+	$test_item = getConfig('test_item');
+	
+	$log->say("Attempting to fetch $test_item for a property value check");
+	
+	//works up to this point
+	$obj = fetchObject($test_item);
+	
+	
 }
 
 /**

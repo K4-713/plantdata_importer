@@ -35,8 +35,8 @@ class echologger {
 	public function say($logme) {
 		if (is_array($logme)) {
 			if ($this->is_3d_array($logme)){
-				//this line will go both to the file and out to the client.
-				fwrite( $this->getTime() . ": " . $this->file, print_r( $logme, true ));
+				fwrite( $this->file, $this->getTime() . ": " . print_r( $logme, true ));
+				print_r( $logme );
 				return;
 				
 			} else { //just 2d. Phew.

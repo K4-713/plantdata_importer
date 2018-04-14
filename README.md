@@ -14,6 +14,13 @@ To use this script, clone this repo, and install the wikibase-api libraries unde
 same location.
 Copy the config_example.php file, rename it to config.php, and add your own 
 config information.
+
+Now depends on EasyRDF, so I could parse those turtle (.ttl) files myself.
+http://www.easyrdf.org/docs/getting-started
+
+Currently, you will have to run composer install twice: Once for me, and once 
+for the wikibase-api
+
 Note: Developed against wikibase-api 2c3c19a5ac5da
 
 ## Work in Progress!

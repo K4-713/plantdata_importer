@@ -38,4 +38,5 @@ sftp-config.json
 /.htpasswd
 /tests/phan/issues
 *.rej
-
+/vendor
+*.lock
