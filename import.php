@@ -172,12 +172,23 @@ function testEverything(){
 function testItemPropertyLookup(){
 	global $log;
 	$test_item = getConfig('test_item');
+	$test_property = getConfig('test_property');
 	
-	$log->say("Attempting to fetch $test_item for a property value check");
+	$log->say("Attempting to fetch $test_item for a $test_property property value check");
 	
 	//works up to this point
-	$obj = fetchObject($test_item);
+	$property_vals = getWikibaseObjectPropertyValues($test_item, $test_property);
 	
+	if($property_vals){
+		if (is_array($property_vals)){
+			$log->say("Returned multiple results for property $test_property on item $test_item");
+			$log->say($property_vals);
+		} else {
+			$log->say("$property_vals is the only value for property $test_property on item $test_item");
+		}
+	} else {
+		$log->say("Didn't find an exact match for property $test_property on item $test_item");
+	}
 	
 }
 

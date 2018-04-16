@@ -34,6 +34,7 @@ $wikibase_password = 'password';
 //These should be changed to match things that you actually have in your 
 //instance.
 $test_item = 'Q4';
+$test_property = 'P2';
 $test_item_search = 'Uncle Ghost';
 $test_property_search = 'species';
 $test_language = 'en';

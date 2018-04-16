@@ -102,26 +102,23 @@ function getWikibaseEntsByLabel( $text, $language, $type = 'item', $exact_match 
 }
 
 
-//fetch and try to parse the turtle file
-function fetchObject($id){
+function getWikibaseObjectPropertyValues( $objID, $propID ){
 	global $log;
-	//like this:
-	//http://wikibase.plantdata.io/wiki/Special:EntityData/Q4.ttl
-	$url = getConfig('wikibase_entitydata_url'). $id . ".ttl";
+	$rdf = fetchObject( $objID );
 	
-	$log->say("Fetching $id");
-
-	$rdf = new EasyRdf_Graph($url);
-	$rdf->load();
-	$rdf->countTriples();
-	
-	//this works
-	$log->say($rdf->countTriples() . " triples loaded");
+	if (!$rdf){
+		$log->say("Failed to fetch object $objID.");
+		return false;
+	}
 	
 	//we are looking for wtd:P2 in this file. 
-	//this works: 
+	//
+	//Curiously: The Q4 .ttl file on plantdata.io has both rdfs:label and wdt:P2 
+	//entries under http://wikibase.plantdata.io/entity/Q4. 
+	//See: http://wikibase.plantdata.io/wiki/Special:EntityData/Q4.ttl
+	//Yet, for some reason, this works... 
 //	$gotten = $rdf->all('http://wikibase.plantdata.io/entity/Q4', 'rdfs:label');
-	//this does not.
+	//...and this does not.
 //	$gotten = $rdf->all('http://wikibase.plantdata.io/entity/Q4', 'wdt:P2');
 
 	//check out the text dump for some clues.
@@ -133,20 +130,65 @@ function fetchObject($id){
 	//At least I am thematically consistent.
 	$arrgh =  $rdf->toRdfPhp(); //say, this works. But it's totally cheap and ugly and I hate it.
 
-	//this should maybe be another config var, as the URIs are arbitrary.
-	$entityKey = 'http://wikibase.plantdata.io/entity/' . $id;
-	//and clearly you have gone too far in this function. Mess ahoy.
-	$propertyKey = 'http://wikibase.plantdata.io/prop/direct/' . 'P2';
-	$arrgh = $arrgh[$entityKey][$propertyKey]; //if it exists, yada yada
+	//this should maybe be another config var, as the URIs are somewhat arbitrary.
+	$entityKey = 'http://wikibase.plantdata.io/entity/' . $objID;
+	$propertyKey = 'http://wikibase.plantdata.io/prop/direct/' . $propID;
+	
+	if (!is_array($arrgh) || !array_key_exists($entityKey, $arrgh)){
+		$log->say("Could not find $entityKey in the entity graph for $objID.");
+		return false;
+	}
+	
+	if (!is_array($arrgh[$entityKey]) || !array_key_exists($propertyKey, $arrgh[$entityKey])) {
+		$log->say("No $propertyKey in the entity graph for $objID.");
+		return false;
+	}
+	
+	$arrgh = $arrgh[$entityKey][$propertyKey];
 	
 	$ret = array();
 	foreach($arrgh as $statements => $valueArrgh){
 		array_push($ret, $valueArrgh['value']);
 	}
 	
-	$log->say("Here are the property values we found for P2 statement on $id"); //facepalm
-	$log->say($ret);
-	//now clean up after yourself before someone sees this.
+	if( !empty($ret)){
+		if ( count($ret) == 1 ){
+			return $ret[0]; //string
+		} else {
+			return $ret;
+		}
+		
+	} else { //it's empty
+		return false;
+	}
+	
+}
+
+/**
+ * Fetch and try to parse the turtle file for the entity specified in $id
+ * Uses EasyRDF parser library
+ * @global type $log
+ * @param type $id
+ * @return boolean|\EasyRdf_Graph
+ */
+function fetchObject($id){
+	global $log;
+	//like this:
+	//http://wikibase.plantdata.io/wiki/Special:EntityData/Q4.ttl
+	$url = getConfig('wikibase_entitydata_url'). $id . ".ttl";
+	
+	$log->say("Fetching $id");
+
+	$rdf = new EasyRdf_Graph($url);
+	$rdf->load();
+	$triples = $rdf->countTriples();
+	
+	if ($triples > 0){
+		$log->say($rdf->countTriples() . " triples loaded");
+		return $rdf;
+	} else {
+		return false;
+	}
 }
 
 /**
@@ -231,5 +273,4 @@ function curl_transaction( $url, $data = false ) {
 	curl_close( $ch );
 	return $curl_response;
 }
-
 
