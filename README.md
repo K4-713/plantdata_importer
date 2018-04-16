@@ -24,9 +24,8 @@ for the wikibase-api
 Note: Developed against wikibase-api 2c3c19a5ac5da
 
 ## Work in Progress!
-This doesn't actually do anything yet, 
-aside from using the API to log into an instance of wikibase, 
-and instantiate the wikibase api.
+This doesn't actually do anything yet, aside from testing communications and 
+basic searching on the wikibse instance specified in the config file.
 
 Eventually, it will take a tsv file, use the first line to determine the 
 property mappings for all the columns, and import the data accordingly.
@@ -34,7 +33,4 @@ property mappings for all the columns, and import the data accordingly.
 ## Usage
 See above: Don't.
 
-If you have to: run import.php with a filename for the TSV you want to import, 
-and an integer number of items you want to import on this run. This will 
-eventually assume you have a valid .tsv file in the ./files directory. Logs for 
-each run will be written to the ./logs directory.
+If you have to: run 'php import.php test_comms'. 

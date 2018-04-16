@@ -41,60 +41,36 @@ $log;
  * ...I don't actually like this yet, but whatever.
  */
 if (!empty($_SERVER['argv'][1])) {
-	$filename = $_SERVER['argv'][1];
+	$function = $_SERVER['argv'][1];
 } else {
-	echo "Please specify a file name\n";
+	echo "Please specify a function to run\n";
 	die();
 }
-if (!empty($_SERVER['argv'][2])) {
-	$run_size = $_SERVER['argv'][2];
-} else {
-	echo "Please specify a run size\n";
-	die();
-}
-
-if (!empty($_SERVER['argv'][3])) {
-	$dry_run = true;
-	echo "Running in dry-run mode - no data will be written";
-}
-
-/**
- * Now, do something.
- * Once I have all this worked out, I'll restructure a bit. For now I don't care.
- */
 
 // The echologger class will both echo and log what we're doing out here, 
-// for easier auditing. Should be able to handle a variety of inputs.
-// set that up here:
+// for easier auditing. It's not great, but it's marginally better than print_r.
 require_once('logger.php');
 $log = new echologger();
-
-//...and use it.
-$log->say("Running the importer on $filename, for $run_size entries.");
-
-if (isset($dry_run) && $dry_run) {
-	$log->say("This is a dry run.");
-} else {
-	$log->say("THIS IS REAL - not a dry run! Data may be changed.");
-}
-
-/**
- * What I will need to be able do:
- * Check to see if an item exists by label in a specific language: 
- *		Done with getWikibaseEntsByLabel() 
- * look up a property in much the same way
- *		Done exactly the same way.
- * Get specific property values on specific items
- *		Ehh, just use the... entity... thingy.
- * Read in a tsv
- * Add a new wikibase item
- * Find an item that already exists by label in a specific language, and add a property
- */
 
 //...I give up.
 require_once( 'scrappy_searcher.php' );
 
-testEverything();
+switch( $function ){
+	case 'test_comms':
+		testEverything();
+		break;
+	default: 
+		//need a -h output here so it's minimally helpful.
+		$log->say("$function is not an established function. Try again with something else.");
+}
+
+/**
+ * What I still need to build:
+ * Read in a tsv
+ *  * Map column headers to maybe existing items or properties. This should be interactive.
+ * Add a new wikibase item
+ * Find an item that already exists by label in a specific language, and add a property
+ */
 
 $log->say("Done for now...");
 
@@ -161,7 +137,10 @@ function setupWBFactory(){
 	 */
 }
 
-//yeah, maybe this will stay in. Potentially useful for everyone.
+/**
+ * Run php import.php test_comms at the command line to test basic connectivity 
+ * and searching on the wikibase instance specified in config.
+ */
 function testEverything(){
 	testConnection();
 	testItemSearchByLabel();

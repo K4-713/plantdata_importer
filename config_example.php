@@ -33,9 +33,18 @@ $wikibase_password = 'password';
 //retrieval functionality.
 //These should be changed to match things that you actually have in your 
 //instance.
+
+//The ID of an item that exists on your wikibase instance
 $test_item = 'Q4';
+//ID of a property that exists on your wikibase instance, which exists in a 
+//statement on the $test_item
 $test_property = 'P2';
-$test_item_search = 'Uncle Ghost';
-$test_property_search = 'species';
+
+//language to test label searching with
 $test_language = 'en';
+//An item label, in language $test_language, on an existing item 
+$test_item_search = 'Uncle Ghost';
+//A property label, in language $test_language, on an existing item 
+$test_property_search = 'species';
+
 

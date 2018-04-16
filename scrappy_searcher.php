@@ -32,7 +32,7 @@ require_once 'vendor/autoload.php';  //grr composer. I didn't want to have to, b
  * $exact_match to true.
  * Returns an array for multiple matches, a string for a single match, and false 
  * for not matches
- * @global type $log
+ * @global echologger $log
  * @param string $text The search term
  * @param string $language Langauge code to match on
  * @param string $type Type of entity to return. item|property, defaults to item
@@ -101,7 +101,14 @@ function getWikibaseEntsByLabel( $text, $language, $type = 'item', $exact_match 
 	
 }
 
-
+/**
+ * Gets all values for property $propID assigned to object $objID in the wikibse
+ * instance specified in config.php
+ * @global echologger $log
+ * @param string $objID The ID of an object in your wikibase instance. Example: "Q4"
+ * @param string $propID The ID of a property in your wikibase instance. Example: "P2"
+ * @return boolean|string|array An array of multiple values, a string if only one value exists, or false for no matches
+ */
 function getWikibaseObjectPropertyValues( $objID, $propID ){
 	global $log;
 	$rdf = fetchObject( $objID );
@@ -167,9 +174,9 @@ function getWikibaseObjectPropertyValues( $objID, $propID ){
 /**
  * Fetch and try to parse the turtle file for the entity specified in $id
  * Uses EasyRDF parser library
- * @global type $log
- * @param type $id
- * @return boolean|\EasyRdf_Graph
+ * @global echologger $log
+ * @param string $id The ID of an object in your wikibase instance. Example: "Q4"
+ * @return boolean|\EasyRdf_Graph A loaded EasyRdf_Graph if the file was available and parseable, otherwise false
  */
 function fetchObject($id){
 	global $log;
@@ -198,7 +205,7 @@ function fetchObject($id){
  * 
  * Largely copied from myself via DonationInterface, and simplified. 
  * 
- * @global type $log
+ * @global echologger $log
  * @param string $url The URL to contact
  * @param array|false $data Associative array of the elements to send in the
  *  querystring, or false if you don't need it.
