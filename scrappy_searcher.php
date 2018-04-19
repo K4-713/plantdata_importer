@@ -32,7 +32,6 @@ require_once 'vendor/autoload.php';  //grr composer. I didn't want to have to, b
  * $exact_match to true.
  * Returns an array for multiple matches, a string for a single match, and false 
  * for not matches
- * @global echologger $log
  * @param string $text The search term
  * @param string $language Langauge code to match on
  * @param string $type Type of entity to return. item|property, defaults to item
@@ -42,9 +41,7 @@ require_once 'vendor/autoload.php';  //grr composer. I didn't want to have to, b
  * @return boolean|string|array
  */
 function getWikibaseEntsByLabel( $text, $language, $type = 'item', $exact_match = false ){
-	global $log;
-	
-	$log->say("Looking for existing $type labeled '$text' in $language");
+	echolog("Looking for existing $type labeled '$text' in $language");
 	$params = array(
 		'action' => 'wbsearchentities',
 		'format' => 'json',
@@ -62,7 +59,7 @@ function getWikibaseEntsByLabel( $text, $language, $type = 'item', $exact_match 
 	$json = curl_transaction(getConfig('wikibase_api_url'), $params);
 	
 	if(!$json){
-		$log->say("Something went wrong with the curl response.");
+		echolog("Something went wrong with the curl response.");
 		return false;
 	}
 	
@@ -102,19 +99,96 @@ function getWikibaseEntsByLabel( $text, $language, $type = 'item', $exact_match 
 }
 
 /**
+ * Gets an item or property label in $language for the item specified in $id 
+ * Returns a string for a single match, and false for no (or multiple, wtf) matches
+ * @param string $id The item to search for
+ * @param string $language Langauge code to return labels for
+ * @return boolean|string
+ */
+function getWikibaseEntsByID( $id, $language ){
+	//set $type here.
+	if ( !is_numeric(trim($id, 'PQ')) ){
+		echolog("'$id' does not appear to be an item or proprty ID.");
+		return false;
+	}
+	
+	$type = false;
+	if (strpos($id, 'Q') === 0 ){
+		$type = 'item';
+	}
+	if (strpos($id, 'P') === 0) {
+		$type = 'property';
+	}
+	
+	if(!$type){
+		echolog("Could not get item type for ID '$id'.");
+		return false;
+	}
+	
+	echolog("Looking for existing labels for item $id in $language");
+	$params = array(
+		'action' => 'wbsearchentities',
+		'format' => 'json',
+		'limit' => '50',
+		'continue' => '0',
+		'language' => $language,
+		// 'uselang' => 'en', //seems to be superfluous
+		'strictlanguage' => true, //without this, you'll get fallback language results.
+		'search' => $id,
+		'type' => $type,	//type = property works for searches too.
+	);
+	
+	//then curl it and see what happens.
+	
+	$json = curl_transaction(getConfig('wikibase_api_url'), $params);
+	
+	if(!$json){
+		echolog("Something went wrong with the curl response.");
+		return false;
+	}
+	
+	$data = json_decode($json, true); //json -> array
+	
+	//Make sure we're matching on the ids, and not some silly text match
+	foreach ( $data['search'] as $ind => $arr ){
+		if ( strtoupper($id) != strtoupper($arr['id']) ){
+			unset($data['search'][$ind]);
+		}
+	}
+	
+	//now, return either a single Q number, an array of Q numbers, or false.
+	$result_count = count($data['search']);
+	
+	switch ($result_count) {
+		case 0:
+			return false;
+		case 1:
+			//just return the one id...
+			///but we may have unset '0', so...
+			foreach( $data['search'] as $ind => $arr ){
+				//the first one is the only one.
+				return $arr['label'];
+			}
+		default:
+			echolog("Something is amiss: $id returned multiple rows!");
+			echolog($data['search']);
+			return false;
+	}
+	
+}
+
+/**
  * Gets all values for property $propID assigned to object $objID in the wikibse
  * instance specified in config.php
- * @global echologger $log
  * @param string $objID The ID of an object in your wikibase instance. Example: "Q4"
  * @param string $propID The ID of a property in your wikibase instance. Example: "P2"
  * @return boolean|string|array An array of multiple values, a string if only one value exists, or false for no matches
  */
 function getWikibaseObjectPropertyValues( $objID, $propID ){
-	global $log;
 	$rdf = fetchObject( $objID );
 	
 	if (!$rdf){
-		$log->say("Failed to fetch object $objID.");
+		echolog("Failed to fetch object $objID.");
 		return false;
 	}
 	
@@ -130,8 +204,8 @@ function getWikibaseObjectPropertyValues( $objID, $propID ){
 
 	//check out the text dump for some clues.
 	//$gotten = $rdf->dump('text');
-	//$log->say("I got the following:");
-	//$log->say($gotten);
+	//echolog("I got the following:");
+	//echolog($gotten);
 	
 	//Until I can figure out what it wants, I'm going cheap.
 	//At least I am thematically consistent.
@@ -142,12 +216,12 @@ function getWikibaseObjectPropertyValues( $objID, $propID ){
 	$propertyKey = 'http://wikibase.plantdata.io/prop/direct/' . $propID;
 	
 	if (!is_array($arrgh) || !array_key_exists($entityKey, $arrgh)){
-		$log->say("Could not find $entityKey in the entity graph for $objID.");
+		echolog("Could not find $entityKey in the entity graph for $objID.");
 		return false;
 	}
 	
 	if (!is_array($arrgh[$entityKey]) || !array_key_exists($propertyKey, $arrgh[$entityKey])) {
-		$log->say("No $propertyKey in the entity graph for $objID.");
+		echolog("No $propertyKey in the entity graph for $objID.");
 		return false;
 	}
 	
@@ -174,24 +248,22 @@ function getWikibaseObjectPropertyValues( $objID, $propID ){
 /**
  * Fetch and try to parse the turtle file for the entity specified in $id
  * Uses EasyRDF parser library
- * @global echologger $log
  * @param string $id The ID of an object in your wikibase instance. Example: "Q4"
  * @return boolean|\EasyRdf_Graph A loaded EasyRdf_Graph if the file was available and parseable, otherwise false
  */
 function fetchObject($id){
-	global $log;
 	//like this:
 	//http://wikibase.plantdata.io/wiki/Special:EntityData/Q4.ttl
 	$url = getConfig('wikibase_entitydata_url'). $id . ".ttl";
 	
-	$log->say("Fetching $id");
+	echolog("Fetching $id");
 
 	$rdf = new EasyRdf_Graph($url);
 	$rdf->load();
 	$triples = $rdf->countTriples();
 	
 	if ($triples > 0){
-		$log->say($rdf->countTriples() . " triples loaded");
+		echolog($rdf->countTriples() . " triples loaded");
 		return $rdf;
 	} else {
 		return false;
@@ -205,17 +277,12 @@ function fetchObject($id){
  * 
  * Largely copied from myself via DonationInterface, and simplified. 
  * 
- * @global echologger $log
  * @param string $url The URL to contact
  * @param array|false $data Associative array of the elements to send in the
  *  querystring, or false if you don't need it.
  * @return string|false
  */
 function curl_transaction( $url, $data = false ) {
-	global $log;
-	
-	$retval = false;    // By default return that we failed
-
 	// Initialize cURL
 	$ch = curl_init();
 
@@ -265,7 +332,7 @@ function curl_transaction( $url, $data = false ) {
 
 			case 400:   // Oh noes! Bad request.. BAD CODE, BAD BAD CODE!
 			default:    // No clue what happened... break out and log it
-				$log->say("Something strange happened with your cURL request. HTTP code $httpCode");
+				echolog("Something strange happened with your cURL request. HTTP code $httpCode");
 				
 				break;
 		}
@@ -273,7 +340,7 @@ function curl_transaction( $url, $data = false ) {
 		// Well the cURL transaction failed for some reason or another.
 		$errno = $this->curl_errno( $ch );
 		$err = curl_error( $ch );
-		$log->say("cURL erorred out thusly: $errno - $err");
+		echolog("cURL erorred out thusly: $errno - $err");
 	}
 
 	// Clean up and return

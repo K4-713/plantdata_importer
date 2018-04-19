@@ -18,6 +18,26 @@
  * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
  */
 
+/**
+ * Using this function instantiates echologger on the first use, and passes the 
+ * message through to the say function.
+ * @staticvar echologger $log The echologger class instance
+ * @param string|array $logme The statement to log
+ * @param boolean $display_last_error True if you want to also display the last error. Otherwise false.
+ */
+function echolog( $logme, $display_last_error = false ){
+	//TODO: might want to implement a verbose mode at some point...
+	static $log = null;
+	if (is_null($log)){
+		$log = new echologger();
+	}
+	$log->say( $logme );
+	if ($display_last_error === true){
+		$log->lastError();
+	}
+	
+}
+
 class echologger {
 
 	private $file = ''; //file handle, opened with fopen
@@ -68,7 +88,6 @@ class echologger {
 		$microtime = microtime();
 		$bits = explode(' ', $microtime);
 		//I want exactly three digits of utime
-		$utime = round($bits[0], 3) * 1000;
 
 		if (!$filename) {
 			$dateformat = 'H:i:s';

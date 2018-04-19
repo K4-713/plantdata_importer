@@ -47,4 +47,11 @@ $test_item_search = 'Uncle Ghost';
 //A property label, in language $test_language, on an existing item 
 $test_property_search = 'species';
 
-
+//references you want to add to all the statements in an import you're going to 
+//run with this tool. 
+//Keys in this array should correspond to the specific reference properties that
+//exist in your instance, and values will be converted to reference values.
+$reference_data = array(
+	'P11' => 'http://www.hownottospellwinnebago.com',	//source URL
+	'P15' => '5/23/2018',								//date retrieved
+);
