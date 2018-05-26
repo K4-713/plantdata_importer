@@ -34,10 +34,10 @@ switch( $function ){
 		testEverything();
 		break;
 	case 'file':
-		if (!empty($_SERVER['argv'][2])) {
-			$file = $_SERVER['argv'][2];
+		if (strlen(getConfig('import_file'))) {
+			$file = getConfig('import_file');
 		} else {
-			echo "Please specify a .tsv file in the files directory to read\n";
+			echo 'Please specify a .tsv or .csv with the $import_file variable in config.php' . "\n";
 			die();
 		}
 		importDataFromFile( $file );
@@ -61,6 +61,7 @@ return;
 
 
 /**
+ * Does not actually test everything. Sorry.
  * Run php import.php test_comms at the command line to test basic connectivity 
  * and searching on the wikibase instance specified in config.
  */
@@ -75,21 +76,166 @@ function testEverything(){
 	//testReferenceSetter();
 }
 
-//run php import.php file [filename] 
+//run php import.php file
+/**
+ * The main controlling function that runs when the script is run with
+ *	run php import.php file
+ * at the command prompt.
+ * @param string $file The filename (no path - it should be in /files) for the 
+ * file to import. 
+ */
 function importDataFromFile( $file ){
 	$data = readDataFile($file);
+	if (!$data){
+		echolog("No data read. Exiting");
+		die();
+	}
 	
-	//now, do some interactive column mapping for everything in line zero.
-	$mapping = mapColumnHeaders($data[0]);
+	//now, do some interactive column mapping for the file.
+	$mapping = getConfig('mapping');
+	if (!is_array( $mapping ) || empty( $mapping )){
+		echolog("No column mapping defined. Building.");
+		$mapping = mapColumnHeaders($data[0]);
+		echolog("Data mapping for config file is as follows:");
+		echolog(var_export($mapping, true));
+	}
 	
-	echolog("Data mapping is as follows:");
-	echolog($mapping);
+	//...and, some statements that should apply to all the lines, as if we added
+	//another column to the import file
+	$import_statements = getConfig('import_statements');
+	if (!is_array( $import_statements ) || empty( $import_statements )){
+		$import_statements = defineImportStatements();
+		echolog("Import statements for config file is as follows:");
+		echolog(var_export($import_statements, true));
+	}
 	
-	//assume that the reference is the same for all items in a run. 
 	
+	//may need to do some integrity checking here to see that all the columns in
+	//the file are mapped. You know: Nice stuff.
+	
+	//find the primary matching column
+	$primary_matching_column = false;
+	foreach ( $mapping as $column => $information ){
+		if (array_key_exists('primary', $information) && $information['primary'] === true ){
+			$primary_matching_column = $column;
+			break;
+		}
+	}
+	$primary_matching_type = $mapping[$primary_matching_column]['type'];
+	$primary_matching_language = $mapping[$primary_matching_column]['lang'];
+	
+	$max_edits = getConfig('max_edits');
+	echolog("Preparing to edit a maximum of $max_edits item(s)");
+	
+	$edits = 0;
+	$stop = false;
+	for ($i=1; ($i < sizeof($data)) && (!$stop); ++$i){
+		//check the primary column for data to match against in the live instance.
+		//For every column we should have a type = [item|property|ID], and lang
+		
+		$edited = false;
+		$message = '';
+		
+		//either add or grab the item we're trying to manipulate
+		switch($primary_matching_type){
+			case 'item':
+				//ensure that the item with the label in the specified language doesn't already exist
+				//TODO: Wire in the regex stuff here too.
+				$matches = getWikibaseEntsByLabel( $data[$i][$primary_matching_column], $primary_matching_language, 'item', true );
+				if ($matches === false){ //it's clean. Import the item.
+					//hhhhhhhhmm.
+					$editing_id = editAddNewItem( $data[$i][$primary_matching_column], $primary_matching_language );
+					//echolog("Sanity check on item $editing_id, please");
+					$edited = true;
+					$message = "New Item '" . $data[$i][$primary_matching_column] . "' added. ";
+				} else {
+					//we did find a match. If we only found one, pull the id so we can add statements to it.
+					if( !is_array($matches) ){
+						//pick it up.
+						$editing_id = $matches;
+					} else {
+						echolog("Found too many matches! Not sure what to do about this...");
+						echolog($matches);
+						//TODO: Add to file for potential merges to review and process?
+						$editing_id = false;
+						$message = "Confusing: '" . $data[$i][$primary_matching_column] . "' has multiple matches. Dropping on head. ";
+					}
+				}
+				
+				break;
+			default:
+				echolog("Sorry, I haven't handled primary matching type '$primary_matching_type' yet. Exiting.");
+				die();
+		}
+		
+		//if we have something to keep editing in the remaining columns...
+		if ($editing_id){
+			//time to add statements! woopwoop
+			if (is_array($import_statements)){
+				$statements = $import_statements;
+			} else {
+				$statements = array();
+			}
+			foreach( $data[$i] as $column => $value ){
+				if ($column === $primary_matching_column) {
+					//no stuff to do.
+					break;
+				}
+
+				//stuff to do!
+				$column_type = $mapping[$column]['type'];
+				switch($column_type){
+					case 'property':
+						$property_id = $mapping[$column]['id'];
+						$language = false;
+						if( array_key_exists('lang', $mapping[$column])){
+							$language = $mapping[$column]['lang'];
+						}
+
+						if( array_key_exists('regex', $mapping[$column])){
+							$value = getFirstRegexMatch($value, $mapping[$column]['regex']);
+						}
+						
+						$statements[] =array(
+							'property_id' => $property_id,
+							'value' => $value,
+							'language' => $language
+						);
+						break;
+					default:
+						echolog("Sorry, I haven't handled column type '$column_type' yet. Exiting.");
+						die();
+				}
+			}
+			
+			if ( !empty($statements) ) {
+				//edit!
+				if (editAddStatementsToItem($editing_id, $statements)){
+					$message .= "Statements added to $editing_id.";
+					$edited = true;
+				}
+			}
+		}
+		
+		if($edited){
+			echolog($message);
+			++$edits;
+		}
+		
+		if( $edits >= $max_edits){
+			$stop = true;
+		}
+	}
+	echolog("Edited $edits items this run.");
 }
 
-//$headers contains a numerically indexed array of the column names
+/**
+ * Ugly interactive command-line function that walks the user through building 
+ * out a column mapping for the file they're trying to import.
+ * @param array $headers Array containing the column headers in the first row of
+ *  .csv/.tsv data
+ * @return array Column mapping array
+ */
 function mapColumnHeaders($headers){
 /**
  * First: Identify what I'm going to call the Primary Matching Column.
@@ -143,6 +289,14 @@ function mapColumnHeaders($headers){
 			break;
 		case 2:
 			$return[$primary_column]['type'] = 'ID';
+			$ask = "Use regular expression to parse ID?";
+			$regex = getUserYN($ask);
+			if($regex) {
+				$ask = "Please input regex to use against column '" . $headers[$primary_column] . "' data";
+				$regex = readLine($ask . " ");
+				$return[$primary_column]['regex'] = $regex;
+			}
+
 			break;
 	}
 	
@@ -186,44 +340,81 @@ function mapColumnHeaders($headers){
 			}
 			
 			//language?
-			$ask = "Do you need to specify a language for data in column '$header'?";
+			$ask = "Is column '$header' language-specific?";
 			if (getUserYN($ask)) {
 				$ask = "What language is the data in column '$header'?";
 				$lang = getUserLanguageChoice($ask);
 				$return[$rownum]['lang'] = $lang;
 			}
 
-			//qualifier?
-//			$ask = "Does column '$header' get a qualifier?";
-//			if (getUserYN($ask)) {
-//				$ask = "TODO: Figure out what kind of data can go in a qualifier. What are you even doing. Y/Y";
-//			}
-
-			//Are we trying to map the value to another item (By label, or item ID)
-			$ask = "Does the column '$header' contain data that will map to a wikibase item?";
-			if( getUserYN($ask)){
-				$choices = array(
-					0 => 'labels',
-					1 => 'IDs',
-				);
-				$ask = "Does this column contain item labels, or IDs?";
-				$choice = getUserChoice($ask, $choices);
-				if ( $choice === 0  ){
-					$return[$rownum]['item_statement'] = 'label';
-				} else {
-					$return[$rownum]['item_statement'] = 'ID';
-				}
+			$ask = "Use regular expression against column '$header'?";
+			$regex = getUserYN($ask);
+			if($regex) {
+				$ask = "Please input regex to use against column '" . $header . "' data";
+				$regex = readLine($ask . " ");
+				$return[$rownum]['regex'] = $regex;
 			}
-			
 		}
 	}
 	
 	return $return;
 }
 
+/**
+ * Interactive prompts to the user which build out an array representing the 
+ * statements that should be imported with every item in a file run. Used by 
+ * importDataFromFile.
+ * @return array
+ */
+function defineImportStatements() {
+	$return = array();
+		
+	$ask = "Define statements to add to every item in the whole import? \nAnalogous to creating an additional column filled with identical information for each line.";
+	$import_statements = getUserYN($ask);
+	
+	if ($import_statements){
+		$import_statements = array();
+		$keep_going = true;
+		while ($keep_going){
+			if (count($import_statements) > 0){
+				echolog("Current every-item import statements:");
+				echolog($import_statements);
+				$ask = "Add every-item import statement?";
+				$keep_going = getUserYN($ask);
+			}
+
+			if($keep_going){
+				$temparr = array( 'type' => 'property' );
+
+				$ask = "Enter a property for the new import statemet";
+				$temparr['property_id'] = readLine($ask . " ");
+				
+				$ask = "Enter a value for the new import statemet";
+				$temparr['value'] = readLine($ask . " ");
+				
+				$ask = "Is this value language-specific?";
+				if (getUserYN($ask)) {
+					$ask = "What language is this data value associated with?";
+					$temparr['language'] = getUserLanguageChoice($ask);
+				}
+				
+				$import_statements[] = $temparr;
+			}
+		}
+	}
+	
+	return $import_statements;
+}
+
+/**
+ * Interactive command-line promots the user for a yes or no answer.
+ * @param string $ask A hopefully descriptive prompt describing the question we 
+ * want the user to answer with a yes or no.
+ * @return boolean True if the user chose yes, false if they chose no.
+ */
 function getUserYN($ask){	
 	$choice = null;
-	//oh, blarf. I don't have an array of languages. For now, I'll just do this:
+
 	while ( is_null($choice) ){
 		$textchoice = readLine($ask . " ");
 		switch (strtoupper($textchoice)) {
@@ -243,7 +434,13 @@ function getUserYN($ask){
 	return $choice;
 }
 
-//maybe someday I'll get our valid languages in here.
+/**
+ * Interactive command-line promots the user for a language code.
+ * TODO: Something more friendly than restricting the entry to 2 characters.
+ * @param string $ask A hopefully descriptive prompt describing why the user 
+ * should supply a language code.
+ * @return string A 2-character lowercase string that might be a language code.
+ */
 function getUserLanguageChoice($ask){
 	$language = false;
 	//oh, blarf. I don't have an array of languages. For now, I'll just do this:
@@ -251,10 +448,17 @@ function getUserLanguageChoice($ask){
 		$language = readLine($ask . " ");
 	}
 	
-	return $language;
+	return strtolower($language);
 }
 
-//return the choice corresponding to a valid index in the options array
+/**
+ * Interactive command-line promots the user with the text in $ask and the 
+ * options defined in the $options array. Loops until the user enters a choice 
+ * that actuall exists, and returns that choice.
+ * @param string $ask Descriptive user prompt for the options being offered
+ * @param array $options A key-value array describing available options.
+ * @return string The index of the user's eventual valid choice.
+ */
 function getUserChoice($ask, $options ){
 	$out = "$ask\n";
 	foreach ($options as $index => $value){
@@ -273,6 +477,12 @@ function getUserChoice($ask, $options ){
 	return $choice;
 }
 
+/**
+ * Uses fgetcsv to read crazyhuge files into an array and scare people.
+ * It's 2018. This is fine.
+ * @param string $file The name of the fine to open and read into an array
+ * @return array|false An array of the file data, or false if it didn't work
+ */
 function readDataFile( $file ){
 	$ext = explode('.', $file);
 	$ext = strtoupper($ext[1]);
@@ -306,8 +516,15 @@ function readDataFile( $file ){
 			//$escape = "";
 			break;	
 	}
+
+	$fullpath = "./files/$file";
+	if (file_exists($fullpath) ){
+		$handle = fopen($fullpath, 'r');
+	} else {
+		echolog("File '$fullpath' does not exist.");
+		return false;
+	}
 	
-	$handle = fopen("./files/$file", 'r');
 	
 	$data = false;
 	if($handle){
@@ -319,16 +536,16 @@ function readDataFile( $file ){
 		$count = count($data);
 		echolog("Parsed file $file, read $count lines");
 		
-		//TODO: need debug/verbose log level
-//		echolog("First 5 lines:");
-//		for ($i=0; $i<5; ++$i){
-//			echolog("Line $i");
-//			echolog($data[$i]);
-//		}
+	} else {
+		echolog("Problem opening file '$fullpath'.");
 	}
 	return $data; //and there may be a heck of a lot of it...
 }
 
+/**
+ * Testing the getWikibaseObjectPropertyValues function in the scrappy_searcher.
+ * Uses $test_item and $test_property in config.
+ */
 function testItemPropertyLookup(){
 	$test_item = getConfig('test_item');
 	$test_property = getConfig('test_property');
@@ -351,6 +568,10 @@ function testItemPropertyLookup(){
 	
 }
 
+/**
+ * Testing the getWikibaseEntsByLabel function in the scrappy_searcher.
+ * Uses $test_property_search and $test_language in config.
+ */
 function testPropertySearchByLabel(){
 	//I don't really mind this, because it's readable...
 	$test_property_search = getConfig('test_property_search');
@@ -370,6 +591,10 @@ function testPropertySearchByLabel(){
 	}
 }
 
+/**
+ * Testing the getWikibaseEntsByLabel function in the scrappy_searcher.
+ * Uses $test_item_search and $test_language in config.
+ */
 function testItemSearchByLabel(){
 	//I don't really mind this, because it's readable...
 	$test_item_search = getConfig('test_item_search');
@@ -389,8 +614,35 @@ function testItemSearchByLabel(){
 	}
 }
 
-//Tired of globals, but who needs 'em.
+/**
+ * Nobody likes globals anyway.
+ * Finds and returns the variable in the config file that corresponds to the 
+ * $varname passed in.
+ * @param string $varname The name of the variable in the config file to return.
+ * @return mixed The value of the config variable, or null if a variable of that 
+ * name is not set. 
+ */
 function getConfig($varname){
 	require('config.php');
+	if (!isset( $$varname )){
+		return null;
+	}
 	return $$varname;
+}
+
+/**
+ * Returns the first regex match in $value, matching the pattern in $regex
+ * @param string $value The string value to try to match on
+ * @param string $regex A regular expression pattern string
+ * @return string|false Returns the matching portion of the string, or false if 
+ * none found.
+ */
+function getFirstRegexMatch($value, $regex){
+	$pregs = array();
+	$regex = trim($regex, '/');
+	preg_match('/' . $regex . '/', $value, $pregs);
+	if ( count($pregs) > 0 ){
+		return $pregs[0];
+	}
+	return false;
 }

@@ -30,18 +30,18 @@ require_once 'vendor/autoload.php';  //grr composer. I didn't want to have to, b
  * Gets an item or property ID (Q of P number) for items with a label in 
  * $language that match $text. To return exact matches only, set 
  * $exact_match to true.
- * Returns an array for multiple matches, a string for a single match, and false 
- * for not matches
+ * Returns an array for multiple matches, a string for a single match, false 
+ * for no matches, and null for something going amiss.
  * @param string $text The search term
  * @param string $language Langauge code to match on
  * @param string $type Type of entity to return. item|property, defaults to item
  * @param boolean $exact_match Whether or not you only want exact matches. 
  * Default false. NOTE: Searches seem to work from the start of the string, and 
  * won't necessarily match from the middle or end...
- * @return boolean|string|array
+ * @return boolean|string|array|null
  */
 function getWikibaseEntsByLabel( $text, $language, $type = 'item', $exact_match = false ){
-	echolog("Looking for existing $type labeled '$text' in $language");
+	//echolog("Looking for existing $type labeled '$text' in $language");
 	$params = array(
 		'action' => 'wbsearchentities',
 		'format' => 'json',
@@ -60,7 +60,7 @@ function getWikibaseEntsByLabel( $text, $language, $type = 'item', $exact_match 
 	
 	if(!$json){
 		echolog("Something went wrong with the curl response.");
-		return false;
+		return null;
 	}
 	
 	$data = json_decode($json, true); //json -> array
@@ -263,7 +263,7 @@ function fetchObject($id){
 	$triples = $rdf->countTriples();
 	
 	if ($triples > 0){
-		echolog($rdf->countTriples() . " triples loaded");
+		//echolog($rdf->countTriples() . " triples loaded");
 		return $rdf;
 	} else {
 		return false;

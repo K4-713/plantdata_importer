@@ -32,19 +32,29 @@ require_once( __DIR__ . '/libs/wikibase-api/vendor/autoload.php' );
 use Mediawiki\Api\MediawikiApi;
 use Mediawiki\Api\ApiUser;
 use Mediawiki\DataModel\EditInfo;
+use Mediawiki\DataModel\Revision;
 use Wikibase\Api\WikibaseFactory;
+use Wikibase\DataModel\Entity\EntityIdValue;
+use Wikibase\DataModel\Entity\Item;
 use Wikibase\DataModel\Entity\ItemId;
+use Wikibase\DataModel\ItemContent;
 use Wikibase\DataModel\Reference;
 use Wikibase\DataModel\Snak\PropertyValueSnak;
 use Wikibase\DataModel\Entity\PropertyId;
+use DataValues\MonolingualTextValue;
 use DataValues\StringValue;
 use DataValues\TimeValue;
 
+/**
+ * Returns this session's MediawikiApi object.
+ * @staticvar type $mw_api MediawikiApi object
+ * @return MediawikiApi
+ */
 function getMediwaikiAPI(){
 	static $mw_api = null;
 	if (is_null($mw_api)){
 		//do the thing.
-		echolog("Logging in to Mediawiki instance specified in config");
+		//echolog("Logging in to Mediawiki instance specified in config");
 
 		try {
 			//pull in the config settings and make the connections
@@ -59,46 +69,162 @@ function getMediwaikiAPI(){
 
 /**
  * Does a bunch of... stuff... and returns a wikibase factory.
- * Class is defined in /libs/wikibase-api/src/Api/WikibaseFactory.php. Kind of.
+ * Class is defined in /libs/wikibase-api/src/Api/WikibaseFactory.php. 
+ * Or, at least, that's the top of the rabbit hole.
  * @return WikibaseFactory WikibaseFactory
  */
 function getWikibaseFactory(){
 	static $wikibase_factory = null;
 		if (is_null($wikibase_factory)){
-		//do the thing.
-		echolog("Setting up the Wikibase Factory");
-		
-		/**
-		 * The following is copied code from the example here:
-		 * https://github.com/addwiki/wikibase-api
-		 */
-		// Create our Factory, All services should be used through this!
-		// You will need to add more or different datavalues here.
-		// In the future Wikidata / Wikibase defaults will be provided in seperate a library.
-		$dataValueClasses = array(
-			'unknown' => 'DataValues\UnknownValue',
-			'string' => 'DataValues\StringValue',
-			'boolean' => 'DataValues\BooleanValue',
-			'number' => 'DataValues\NumberValue',
-			'globecoordinate' => 'DataValues\Geo\Values\GlobeCoordinateValue',
-			'monolingualtext' => 'DataValues\MonolingualTextValue',
-			'multilingualtext' => 'DataValues\MultilingualTextValue',
-			'quantity' => 'DataValues\QuantityValue',
-			'time' => 'DataValues\TimeValue',
-			'wikibase-entityid' => 'Wikibase\DataModel\Entity\EntityIdValue',
-		);
-		$wikibase_factory = new WikibaseFactory(
-			getMediwaikiAPI(),
-			new DataValues\Deserializers\DataValueDeserializer($dataValueClasses),
-			new DataValues\Serializers\DataValueSerializer()
-		);
+			//do the thing.
+			//echolog("Setting up the Wikibase Factory");
 
-		/**
-		 * End mostly copied example code. The Wikibase Factory is ready now.
-		 */
+			/**
+			 * The following is mostly copied code from the example here:
+			 * https://github.com/addwiki/wikibase-api
+			 */
+			// Create our Factory, All services should be used through this!
+			// You will need to add more or different datavalues here.
+			// In the future Wikidata / Wikibase defaults will be provided in seperate a library.
+			$dataValueClasses = array(
+				'unknown' => 'DataValues\UnknownValue',
+				'string' => 'DataValues\StringValue',
+				'boolean' => 'DataValues\BooleanValue',
+				'number' => 'DataValues\NumberValue',
+				'globecoordinate' => 'DataValues\Geo\Values\GlobeCoordinateValue',
+				'monolingualtext' => 'DataValues\MonolingualTextValue',
+				'multilingualtext' => 'DataValues\MultilingualTextValue',
+				'quantity' => 'DataValues\QuantityValue',
+				'time' => 'DataValues\TimeValue',
+				'wikibase-entityid' => 'Wikibase\DataModel\Entity\EntityIdValue',
+			);
+			$wikibase_factory = new WikibaseFactory(
+				getMediwaikiAPI(),
+				new DataValues\Deserializers\DataValueDeserializer($dataValueClasses),
+				new DataValues\Serializers\DataValueSerializer()
+			);
+
+			/**
+			 * End mostly copied example code. The Wikibase Factory is ready now.
+			 */
 	}
 	
 	return $wikibase_factory;
+}
+
+/**
+ * Adds a new item to the wikibase instance defined in the config file, under 
+ * the user account also specified in the config file.
+ * Edit summary also built from config.
+ * Returns the newly added item ID as a string.
+ * THIS FUNCTION DOES PERFORM LIVE EDITS
+ * @param string $label The label of the new item to add
+ * @param string $language Language code for the language that $label is written 
+ * in.
+ * @return string The item ID.
+ */
+function editAddNewItem( $label, $language ){
+	$saver = getWikibaseFactory()->newRevisionSaver();
+	
+	$newItem = Item::newEmpty();
+	$newItem->setLabel( $language, $label );
+
+	$edit = new Revision(
+		new ItemContent( $newItem )
+	);
+	$resultingItem = $saver->save( $edit, getEditSummaryFromConfig() );
+
+	// You can get the ItemId object of the created item by doing the following
+	$itemIdString = $resultingItem->getId()->__toString();
+	return $itemIdString;
+}
+
+/**
+ * Adds multiple statements to an item on the wikibase instance defined in the 
+ * config file, under the user account also specified in the config file.
+ * Edit summary and references also built from config.
+ * This functions spends a lot of time verifying that these statements we're 
+ * about to add, don't already exist.
+ * THIS FUNCTION DOES PERFORM LIVE EDITS
+ * @param string $item_id Item ID we are adding statements to
+ * @param array $statements An array of arrays which correspond to a statement.
+ * Each statement array should contain 'property_id',  'value', and 'language' 
+ * key-value pairs
+ * @return boolean true of any edits were made, false if none.
+ */
+function editAddStatementsToItem($item_id, $statements){
+	//grab the existing statements on this item
+	$itemObj = getItem($item_id);
+	$statementList = $itemObj->getStatements();
+	
+	//check to see if there even are any. With this being an import tool and 
+	//everything, there's a good chance there won't be.
+	$count = $statementList->count();
+	
+	if ($count > 0){
+		//check to see if the statements already exist.
+		foreach ($statements as $i => $statement_data){
+			$property_id = $statement_data['property_id'];
+			
+			//get the proeprty statements that exist on this item. Unset if
+			//there is an exact match.
+			
+			//statementList is a StatementList class...
+			$statementList_Smaller = $statementList->getByPropertyId( new PropertyId($property_id));
+			if ($statementList_Smaller->count() > 0){
+				foreach ($statementList_Smaller as $j => $statementObj){
+					if ($statement_data['value'] === getStatementObjectValue($statementObj)){
+						unset($statements[$i]);
+					}
+				}
+			}
+			//NO LANGUAGE ANYWHERE. What the...
+			//maybe it's buried in someone's main snak somewhere. Hargh.
+		}
+	}
+	
+	if(count($statements) === 0){
+		return false;
+	}
+	
+	foreach ($statements as $i => $statement_data){
+		//add statements.
+		$property_id = $statement_data['property_id'];
+		$value = $statement_data['value'];
+		$language = false;
+		if(array_key_exists('language', $statement_data)){
+			$language = $statement_data['language'];
+		}
+
+		//now, all that remains should be to actually make the edit here.
+		editAddSingleStatementToItem($item_id, $property_id, $value, $language);
+	}
+	return true;
+	
+}
+
+/**
+ * Adds a single statement to an item on the wikibase instance defined in the 
+ * config file, under the user account also specified in the config file.
+ * Edit summary and references also built from config.
+ * Returns the newly added item ID as a string.
+ * THIS FUNCTION DOES PERFORM LIVE EDITS
+ * @param string $item The item ID to add the statement to
+ * @param string $property_id The property ID for the statement
+ * @param string $value The value of $property_id in $item
+ * @param string $language If relevent, the language $value is written in.
+ */
+function editAddSingleStatementToItem($item, $property_id, $value, $language){
+	$statementCreator = getWikibaseFactory()->newStatementCreator();
+	$claim_guid = $statementCreator->create(
+        new PropertyValueSnak(
+            PropertyId::newFromNumber( trim($property_id, 'P') ),
+            typecastDataForProperty($property_id, $value, $language)
+        ),
+        $item
+    );
+	//do we need to actually use the saver? Because it looks like no.
+	editAddStatementReferences( $claim_guid );
 }
 
 /**
@@ -136,24 +262,7 @@ function testAPIConnection(){
  * exercise to see if I could get it to work at all (yes).
  */
 function testReferenceSetter(){
-	//please untangle this hedgemaze...
-	//Let's use the searcher to get a statement and then add a reference to it.
-
-	$match = getWikibaseEntsByLabel(getConfig('test_item_search'), getConfig('test_language'), 'item', true);
-	//now, $match is a string containing Q-something.
-
-	//use the wikibase api thingy to get the item
-	$itemId = new ItemId($match);
-	
-	$wikibase_factory = getWikibaseFactory();
-	$itemLookup = $wikibase_factory->newItemLookup();
-	$termLookup = $wikibase_factory->newTermLookup();
-
-	// and what is this?
-	// Wikibase\DataModel\Entity\Item
-	// /wikibase-api/vendor/wikibase/data-model/src/Entity/Item.php
-	$item = $itemLookup->getItemForId($itemId);
-	$langLabel = $termLookup->getLabel($itemId, getConfig('test_language'));
+	$item = getItem(getConfig('test_item'));
 
 	//$item->getStatements() is a StatementList class, which is very close to the reference stuff we need.
 	$statementList = $item->getStatements();
@@ -181,34 +290,9 @@ function testReferenceSetter(){
 		echolog("Statement $iter has $refcount references.");
 
 		if ($refcount === 0){
-			//there's a reference setter in the factory, but no getter. Curious.
-			$refsetter = $wikibase_factory->newReferenceSetter();
+
+			editAddStatementReferences( $statement );
 			
-			//to actually set the reference, we need the following:			
-			//Reference $reference, $statement, $targetReference = null, EditInfo $editInfo = null
-			
-			//I *think* what they're trying to say with $targetReference is if you want to replace the old reference?
-			//editInfo just passes through to the post request, but is of course another object.
-
-			//let's try this...
-			$ref_data = getConfig('reference_data');
-			$ref_snaks = array();
-			foreach ($ref_data as $ref_property => $ref_value){
-				$valueObj = typecastDataForProperty($ref_property, $ref_value);
-				$ref_snaks[] = new PropertyValueSnak(
-					PropertyId::newFromNumber( trim($ref_property, 'P') ),
-					$valueObj
-				);
-			}
-
-			$refObject = new Reference($ref_snaks);
-
-			$refsetter->set(
-					$refObject, 
-					$statement, 
-					null, 
-					new EditInfo("Testing my importer's ability to set a reference.", false, true)
-			);
 		} else {
 			//next trick: Can we read the references that are already there?
 			//Probably, but that's a different problem, and one I'm not entirely 
@@ -218,7 +302,18 @@ function testReferenceSetter(){
 	}
 }
 
-function typecastDataForProperty($property_id, $data){
+
+/**
+ * Finds and creates the wikibase_api data object class required to create a 
+ * statement with the supplied data value on the specified property.
+ * @param string $property_id ID of the property to use
+ * @param string $data The data we'd like to assign to the property, presumably 
+ * in a statement.
+ * @param string $language language code, if necessary.
+ * @return Object of various origins that should be readily assignable to a 
+ * statement object involving the specified property.
+ */
+function typecastDataForProperty($property_id, $data, $language = false){
 	//first, look up what kind of data the property wants.
 	$property = getProperty($property_id);
 	$data_type_id = $property->getDataTypeId();
@@ -227,9 +322,16 @@ function typecastDataForProperty($property_id, $data){
 	
 	$obj = null;
 	switch( $data_type_id ){
+		case 'external-id':
 		case 'url':
 		case 'string':
 			$obj = new StringValue( $data );
+			break;
+		case 'monolingualtext':
+			$obj = new MonolingualTextValue( $language, $data );
+			break;
+		case 'wikibase-item':
+			$obj = new EntityIdValue( new ItemId($data) );
 			break;
 		case 'time':
 			//of course, this is horrifyingly complicated.
@@ -302,15 +404,137 @@ function typecastDataForProperty($property_id, $data){
 	return $obj;
 }
 
-function getProperty($property_id){
-	//static here to prevent multiple lookups
+/**
+ * Gets a property object from a property_id string.
+ * @staticvar array $retrieved local caching
+ * @param string $property_id The ID of the property object to get
+ * @param boolean $refresh Force getting even if we've cached it already this run
+ * @return Property object
+ */
+function getProperty($property_id, $refresh = false){
+	//static here to prevent bandwidth wasting
+	static $retrieved = array();
+	if ( ($refresh === false) && (array_key_exists($property_id, $retrieved)) ){
+		return $retrieved[$property_id];
+	}
+	
 	$propertyLookup = getWikibaseFactory()->newPropertyLookup();
 	$propId_Obj = new PropertyId($property_id);
 	$property = $propertyLookup->getPropertyForId($propId_Obj);
+	$retrieved[$property_id] = $property;
 	return $property;
 }
 
-function getItem(){
-	//static here to prevent multiple lookups
+/**
+ * Takes an item id string, and returns an object of type... that comes back 
+ * when you call getItemForId on an ItemLookup object. Shrug.
+ * Bothersome that this is basically copied code from the function above...
+ * @staticvar array $retrieved Caching in the function to hopefully sometimes 
+ * cut down on bandwidth.
+ * @param string $item_id The item ID we're getting as an object.
+ * @param bool $refresh Go get it, whether or not it's already been retrieved 
+ * and cached  this run.
+ * @return Object. Totally.
+ */
+function getItem($item_id, $refresh = false){
+	//static here to prevent bandwidth wasting
+	static $retrieved = array();
+	if ( ($refresh === false) && (array_key_exists($item_id, $retrieved)) ){
+		return $retrieved[$item_id];
+	}
 	
+	$itemLookup = getWikibaseFactory()->newItemLookup();
+	$itemId_Obj = new ItemId($item_id);
+	$item = $itemLookup->getItemForId($itemId_Obj);
+	$retrieved[$item_id] = $item;
+	return $item;
 }
+
+/**
+ * Returns a Reference object corresponding to the reference information set in 
+ * config.
+ * TODO: Local caching here too.
+ * @return Reference
+ */
+function getReferencesFromConfig(){
+	$ref_data = getConfig('reference_data');
+	$ref_snaks = array();
+	foreach ($ref_data as $ref_property => $ref_value){
+		$valueObj = typecastDataForProperty($ref_property, $ref_value);
+		$ref_snaks[] = new PropertyValueSnak(
+			PropertyId::newFromNumber( trim($ref_property, 'P') ),
+			$valueObj
+		);
+	}
+
+	$refObject = new Reference($ref_snaks);
+	return $refObject;
+}
+
+/**
+ * Builds usable wikibase objects from the edit summary defined in the config 
+ * file.
+ * Returns an EditInfo object directly consumable by the editing monster.
+ * @return EditInfo
+ */
+function getEditSummaryFromConfig(){
+	$summary = getConfig('edit_summary');
+	//EditInfo object takes the following:
+	//$summary = '', $minor = self::NOTMINOR, $bot = self::NOTBOT
+	//so, I'm telling it this edit is not minor, and that I am in fact a bot.
+	$editInfoObject = new EditInfo($summary, false, true);
+	return $editInfoObject;
+}
+
+/**
+ * Get the string value of an object of class Statement.
+ * @param Statement $statementObj
+ * @return string
+ */
+function getStatementObjectValue($statementObj){
+	$main = $statementObj->getMainSnak();
+	$value = $main->getDataValue()->getValue(); // o_O;
+	
+	if( gettype($value) != 'string' ){	
+		$class = get_class($value);
+		switch ($class){
+			case 'Wikibase\DataModel\Entity\EntityIdValue' :
+				$value = $value->getEntityId()->serialize();
+				break;
+			default:
+				echolog("Oh look, an unhandled possibility ($class) in " . __FUNCTION__);
+				die();
+		}	
+	}
+	
+	if( gettype($value) != 'string' ){
+		echolog("TODO: Solve for partially handled class " . get_class($value) . " in " . __FUNCTION__);
+		die();
+	}
+	return $value;
+}
+
+/**
+ * Adds references to a statement on the wikibase instance defined in the 
+ * config file, under the user account also specified in the config file.
+ * Edit summary and references also built from config.
+ * Returns true... all the time, I guess.
+ * THIS FUNCTION DOES PERFORM LIVE EDITS
+ * @param string $statement The statement guid
+ * @return true Truuuuuue
+ */
+function editAddStatementReferences( $statement ){
+	$refsetter = getWikibaseFactory()->newReferenceSetter();
+
+	//to actually set the reference with the setter, we need the following:			
+	//Reference $reference, $statement, $targetReference = null, EditInfo $editInfo = null
+
+	$refsetter->set(
+			getReferencesFromConfig(), 
+			$statement, 
+			null, 
+			getEditSummaryFromConfig()
+	);
+	return true;
+}
+
