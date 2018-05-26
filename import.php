@@ -533,8 +533,15 @@ function readDataFile( $file ){
 	$data = false;
 	if($handle){
 		$data = array();
-		while ( ($line = fgetcsv( $handle, 0, $delimiter)) !== FALSE){ //may need those other two params
+		$limit = getConfig('file_read_limit');
+		$stop = false;
+		while ((($line = fgetcsv( $handle, 0, $delimiter)) !== FALSE) && (!$stop)){
 			array_push($data, $line);
+			if( $limit ){
+				if(count($data) >= $limit){
+					$stop = true;
+				}
+			}
 		}
 		
 		$count = count($data);
