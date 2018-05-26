@@ -55,8 +55,9 @@ function getWikibaseEntsByLabel( $text, $language, $type = 'item', $exact_match 
 	);
 	
 	//then curl it and see what happens.
-	
+	stopwatch("getWikibaseEntsByLabel_curl");
 	$json = curl_transaction(getConfig('wikibase_api_url'), $params);
+	stopwatch("getWikibaseEntsByLabel_curl", $text);
 	
 	if(!$json){
 		echolog("Something went wrong with the curl response.");

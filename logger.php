@@ -38,6 +38,25 @@ function echolog( $logme, $display_last_error = false ){
 	
 }
 
+
+function stopwatch($timer_name, $text = ''){
+	if( !getConfig('stopwatch_output') ){
+		return;
+	}
+	
+	//I want this to behave like a toggle. Don't need to get too fancy, I just need 
+	//to know where my bottlenecks are.
+	static $timers = array();
+	if (array_key_exists($timer_name, $timers)){
+		$elapsed = microtime(true) - $timers[$timer_name];
+		echolog("Stopwatch '$timer_name' = $elapsed $text");
+		unset($timers[$timer_name]);
+	} else {
+		$timers[$timer_name] = microtime(true);
+	}
+}
+
+
 class echologger {
 
 	private $file = ''; //file handle, opened with fopen

@@ -124,7 +124,10 @@ function getWikibaseFactory(){
  * @return string The item ID.
  */
 function editAddNewItem( $label, $language ){
-	$saver = getWikibaseFactory()->newRevisionSaver();
+	static $saver = null;
+	if (is_null($saver)){
+		$saver = getWikibaseFactory()->newRevisionSaver();
+	}
 	
 	$newItem = Item::newEmpty();
 	$newItem->setLabel( $language, $label );
@@ -132,7 +135,9 @@ function editAddNewItem( $label, $language ){
 	$edit = new Revision(
 		new ItemContent( $newItem )
 	);
+	stopwatch('RevisionSaver Save');
 	$resultingItem = $saver->save( $edit, getEditSummaryFromConfig() );
+	stopwatch('RevisionSaver Save');
 
 	// You can get the ItemId object of the created item by doing the following
 	$itemIdString = $resultingItem->getId()->__toString();
@@ -215,7 +220,12 @@ function editAddStatementsToItem($item_id, $statements){
  * @param string $language If relevent, the language $value is written in.
  */
 function editAddSingleStatementToItem($item, $property_id, $value, $language){
-	$statementCreator = getWikibaseFactory()->newStatementCreator();
+	stopwatch('AddSingleStatement');
+	static $statementCreator = null;
+	if (is_null($statementCreator)){
+		$statementCreator = getWikibaseFactory()->newStatementCreator();
+	}
+	
 	$claim_guid = $statementCreator->create(
         new PropertyValueSnak(
             PropertyId::newFromNumber( trim($property_id, 'P') ),
@@ -224,7 +234,10 @@ function editAddSingleStatementToItem($item, $property_id, $value, $language){
         $item
     );
 	//do we need to actually use the saver? Because it looks like no.
+	stopwatch('AddReferences');
 	editAddStatementReferences( $claim_guid );
+	stopwatch('AddReferences');
+	stopwatch('AddSingleStatement');
 }
 
 /**
@@ -457,17 +470,20 @@ function getItem($item_id, $refresh = false){
  * @return Reference
  */
 function getReferencesFromConfig(){
-	$ref_data = getConfig('reference_data');
-	$ref_snaks = array();
-	foreach ($ref_data as $ref_property => $ref_value){
-		$valueObj = typecastDataForProperty($ref_property, $ref_value);
-		$ref_snaks[] = new PropertyValueSnak(
-			PropertyId::newFromNumber( trim($ref_property, 'P') ),
-			$valueObj
-		);
-	}
+	static $refObject = null;
+	if(is_null($refObject)){
+		$ref_data = getConfig('reference_data');
+		$ref_snaks = array();
+		foreach ($ref_data as $ref_property => $ref_value){
+			$valueObj = typecastDataForProperty($ref_property, $ref_value);
+			$ref_snaks[] = new PropertyValueSnak(
+				PropertyId::newFromNumber( trim($ref_property, 'P') ),
+				$valueObj
+			);
+		}
 
-	$refObject = new Reference($ref_snaks);
+		$refObject = new Reference($ref_snaks);
+	}
 	return $refObject;
 }
 
@@ -478,11 +494,14 @@ function getReferencesFromConfig(){
  * @return EditInfo
  */
 function getEditSummaryFromConfig(){
-	$summary = getConfig('edit_summary');
-	//EditInfo object takes the following:
-	//$summary = '', $minor = self::NOTMINOR, $bot = self::NOTBOT
-	//so, I'm telling it this edit is not minor, and that I am in fact a bot.
-	$editInfoObject = new EditInfo($summary, false, true);
+	static $editInfoObject = null;
+	if(is_null($editInfoObject)){
+		$summary = getConfig('edit_summary');
+		//EditInfo object takes the following:
+		//$summary = '', $minor = self::NOTMINOR, $bot = self::NOTBOT
+		//so, I'm telling it this edit is not minor, and that I am in fact a bot.
+		$editInfoObject = new EditInfo($summary, false, true);
+	}
 	return $editInfoObject;
 }
 
@@ -524,7 +543,10 @@ function getStatementObjectValue($statementObj){
  * @return true Truuuuuue
  */
 function editAddStatementReferences( $statement ){
-	$refsetter = getWikibaseFactory()->newReferenceSetter();
+	static $refsetter = null;
+	if(is_null($refsetter)){
+		$refsetter = getWikibaseFactory()->newReferenceSetter();
+	}
 
 	//to actually set the reference with the setter, we need the following:			
 	//Reference $reference, $statement, $targetReference = null, EditInfo $editInfo = null

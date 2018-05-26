@@ -85,7 +85,10 @@ function testEverything(){
  * file to import. 
  */
 function importDataFromFile( $file ){
+	stopwatch("importDataFromFile");
+	stopwatch("readDataFile");
 	$data = readDataFile($file);
+	stopwatch("readDataFile");
 	if (!$data){
 		echolog("No data read. Exiting");
 		die();
@@ -227,6 +230,7 @@ function importDataFromFile( $file ){
 		}
 	}
 	echolog("Edited $edits items this run.");
+	stopwatch("importDataFromFile");
 }
 
 /**

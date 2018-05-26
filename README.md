@@ -24,13 +24,15 @@ for the wikibase-api
 Note: Developed against wikibase-api 2c3c19a5ac5da
 
 ## Work in Progress!
-This doesn't actually do anything yet, aside from testing communications and 
-basic searching on the wikibse instance specified in the config file.
+Use at your own risk!
 
-Eventually, it will take a tsv file, use the first line to determine the 
-property mappings for all the columns, and import the data accordingly.
+Currently, the script is able to take a csv or tsv file, use the first line to 
+walk the user through setting up the property mappings for all the columns, and 
+import the data accordingly with constant checks to see if the items and 
+properties to be imported already exist.
 
 ## Usage
-See above: Don't.
-
-If you have to: run 'php import.php test_comms'. 
+running 'php import.php test_comms' will try some basic operations against the 
+wikibase installation you specify in config.
+Running 'php import.php file' starts working on importing a file specified in 
+config.
