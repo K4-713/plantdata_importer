@@ -40,7 +40,10 @@ switch( $function ){
 			echo 'Please specify a .tsv or .csv with the $import_file variable in config.php' . "\n";
 			die();
 		}
-		importDataFromFile( $file );
+		if (!empty($_SERVER['argv'][2]) && is_numeric($_SERVER['argv'][2])) {
+			$offset = $_SERVER['argv'][2];
+		}
+		importDataFromFile( $file, $offset );
 		break;
 	default: 
 		//need a -h output here so it's minimally helpful.
@@ -83,11 +86,13 @@ function testEverything(){
  * at the command prompt.
  * @param string $file The filename (no path - it should be in /files) for the 
  * file to import. 
+ * @param integer|false $offset A number of rows to skip (after the headers in row 0) 
+ * before beginning processing. False to start at the beginning.
  */
-function importDataFromFile( $file ){
+function importDataFromFile( $file, $offset = false ){
 	stopwatch("importDataFromFile");
 	stopwatch("readDataFile");
-	$data = readDataFile($file);
+	$data = readDataFile($file, $offset);
 	stopwatch("readDataFile");
 	if (!$data){
 		echolog("No data read. Exiting");
@@ -482,12 +487,13 @@ function getUserChoice($ask, $options ){
 }
 
 /**
- * Uses fgetcsv to read crazyhuge files into an array and scare people.
- * It's 2018. This is fine.
+ * Uses fgetcsv to read crazyhuge files into an array in various ways.
  * @param string $file The name of the fine to open and read into an array
+ * @param integer|false $offset A number of rows to skip (after the headers in row 0) 
+ * before beginning processing. False to start at the beginning.
  * @return array|false An array of the file data, or false if it didn't work
  */
-function readDataFile( $file ){
+function readDataFile( $file, $offset ){
 	$ext = explode('.', $file);
 	$ext = strtoupper($ext[1]);
 	$mode = false;
@@ -535,13 +541,19 @@ function readDataFile( $file ){
 		$data = array();
 		$limit = getConfig('file_read_limit');
 		$stop = false;
+		$linecounter = 0;
+		if (!$offset){
+			$offset = 0;
+		}
+		
 		while ((($line = fgetcsv( $handle, 0, $delimiter)) !== FALSE) && (!$stop)){
-			array_push($data, $line);
-			if( $limit ){
-				if(count($data) >= $limit){
+			if (($linecounter === 0) || ($linecounter > $offset)){
+				array_push($data, $line);
+				if( $limit && (count($data) >= $limit) ){
 					$stop = true;
 				}
 			}
+			++$linecounter;
 		}
 		
 		$count = count($data);
