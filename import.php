@@ -40,6 +40,7 @@ switch( $function ){
 			echo 'Please specify a .tsv or .csv with the $import_file variable in config.php' . "\n";
 			die();
 		}
+		$offset = false;
 		if (!empty($_SERVER['argv'][2]) && is_numeric($_SERVER['argv'][2])) {
 			$offset = $_SERVER['argv'][2];
 		}
@@ -141,7 +142,7 @@ function importDataFromFile( $file, $offset = false ){
 		//check the primary column for data to match against in the live instance.
 		//For every column we should have a type = [item|property|ID], and lang
 		
-		$edited = false;
+		$editing = false;
 		$message = '';
 		
 		//either add or grab the item we're trying to manipulate
@@ -150,22 +151,22 @@ function importDataFromFile( $file, $offset = false ){
 				//ensure that the item with the label in the specified language doesn't already exist
 				//TODO: Wire in the regex stuff here too.
 				$matches = getWikibaseEntsByLabel( $data[$i][$primary_matching_column], $primary_matching_language, 'item', true );
+				$editing_item = false;
 				if ($matches === false){ //it's clean. Import the item.
 					//hhhhhhhhmm.
-					$editing_id = editAddNewItem( $data[$i][$primary_matching_column], $primary_matching_language );
+					$editing_item = createItemObject( $data[$i][$primary_matching_column], $primary_matching_language );
 					//echolog("Sanity check on item $editing_id, please");
-					$edited = true;
-					$message = "New Item '" . $data[$i][$primary_matching_column] . "' added. ";
+					$editing = true;
+					$message = "New Item '" . $data[$i][$primary_matching_column] . "' created. ";
 				} else {
 					//we did find a match. If we only found one, pull the id so we can add statements to it.
 					if( !is_array($matches) ){
 						//pick it up.
-						$editing_id = $matches;
+						$editing_item = getItem($matches);
 					} else {
 						echolog("Found too many matches! Not sure what to do about this...");
 						echolog($matches);
 						//TODO: Add to file for potential merges to review and process?
-						$editing_id = false;
 						$message = "Confusing: '" . $data[$i][$primary_matching_column] . "' has multiple matches. Dropping on head. ";
 					}
 				}
@@ -177,7 +178,7 @@ function importDataFromFile( $file, $offset = false ){
 		}
 		
 		//if we have something to keep editing in the remaining columns...
-		if ($editing_id){
+		if ($editing_item !== false){
 			//time to add statements! woopwoop
 			if (is_array($import_statements)){
 				$statements = $import_statements;
@@ -218,15 +219,18 @@ function importDataFromFile( $file, $offset = false ){
 			
 			if ( !empty($statements) ) {
 				//edit!
-				if (editAddStatementsToItem($editing_id, $statements)){
-					$message .= "Statements added to $editing_id.";
-					$edited = true;
+				$added_statements = addStatementsToItemObject($editing_item, $statements);
+				if ( $added_statements !== false){
+					//do the edit.
+					$message .= "$added_statements new statements added. ";
+					$editing = true;
 				}
 			}
 		}
 		
-		if($edited){
-			echolog($message);
+		if($editing){
+			$item_id = editAddItemObject($editing_item);
+			echolog("$item_id: $message");
 			++$edits;
 		}
 		

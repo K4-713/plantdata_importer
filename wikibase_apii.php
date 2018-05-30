@@ -39,7 +39,9 @@ use Wikibase\DataModel\Entity\Item;
 use Wikibase\DataModel\Entity\ItemId;
 use Wikibase\DataModel\ItemContent;
 use Wikibase\DataModel\Reference;
+use Wikibase\DataModel\ReferenceList;
 use Wikibase\DataModel\Snak\PropertyValueSnak;
+use Wikibase\DataModel\Statement\Statement;
 use Wikibase\DataModel\Entity\PropertyId;
 use DataValues\MonolingualTextValue;
 use DataValues\StringValue;
@@ -129,11 +131,34 @@ function editAddNewItem( $label, $language ){
 		$saver = getWikibaseFactory()->newRevisionSaver();
 	}
 	
-	$newItem = Item::newEmpty();
-	$newItem->setLabel( $language, $label );
+	$newItem = createItemObject($label, $language);
 
 	$edit = new Revision(
 		new ItemContent( $newItem )
+	);
+	stopwatch('RevisionSaver Save');
+	$resultingItem = $saver->save( $edit, getEditSummaryFromConfig() );
+	stopwatch('RevisionSaver Save');
+
+	// You can get the ItemId object of the created item by doing the following
+	$itemIdString = $resultingItem->getId()->__toString();
+	return $itemIdString;
+}
+
+function createItemObject( $label, $language ){
+	$newItem = Item::newEmpty();
+	$newItem->setLabel( $language, $label );
+	return $newItem;
+}
+
+function editAddItemObject( $itemObj ){
+	static $saver = null;
+	if (is_null($saver)){
+		$saver = getWikibaseFactory()->newRevisionSaver();
+	}
+
+	$edit = new Revision(
+		new ItemContent( $itemObj )
 	);
 	stopwatch('RevisionSaver Save');
 	$resultingItem = $saver->save( $edit, getEditSummaryFromConfig() );
@@ -208,6 +233,58 @@ function editAddStatementsToItem($item_id, $statements){
 	
 }
 
+function addStatementsToItemObject(&$itemObj, $statements){
+	//grab the existing statements on this item
+	$statementList = $itemObj->getStatements();
+	
+	//check to see if there even are any. With this being an import tool and 
+	//everything, there's a good chance there won't be.
+	$count = $statementList->count();
+	
+	if ($count > 0){
+		//check to see if the statements already exist.
+		foreach ($statements as $i => $statement_data){
+			$property_id = $statement_data['property_id'];
+			
+			//get the proeprty statements that exist on this item. Unset if
+			//there is an exact match.
+			
+			//statementList is a StatementList class...
+			$statementList_Smaller = $statementList->getByPropertyId( new PropertyId($property_id));
+			if ($statementList_Smaller->count() > 0){
+				foreach ($statementList_Smaller as $j => $statementObj){
+					if ($statement_data['value'] === getStatementObjectValue($statementObj)){
+						unset($statements[$i]);
+					}
+				}
+			}
+			//NO LANGUAGE ANYWHERE. What the...
+			//maybe it's buried in someone's main snak somewhere. Hargh.
+		}
+	}
+	
+	if(count($statements) === 0){
+		return false;
+	}
+	
+	$count = 0;
+	foreach ($statements as $i => $statement_data){
+		//add statements.
+		$property_id = $statement_data['property_id'];
+		$value = $statement_data['value'];
+		$language = false;
+		if(array_key_exists('language', $statement_data)){
+			$language = $statement_data['language'];
+		}
+		$statementList->addStatement(createStatementObject($property_id, $value, $language));
+		++$count;
+	}
+	
+	$itemObj->setStatements($statementList);
+	return $count;
+	
+}
+
 /**
  * Adds a single statement to an item on the wikibase instance defined in the 
  * config file, under the user account also specified in the config file.
@@ -238,6 +315,23 @@ function editAddSingleStatementToItem($item, $property_id, $value, $language){
 	editAddStatementReferences( $claim_guid );
 	stopwatch('AddReferences');
 	stopwatch('AddSingleStatement');
+}
+
+function createStatementObject($property_id, $value, $language){
+	$refList = new ReferenceList();
+	$refList->addReference(getReferencesFromConfig());
+	
+	$statement = new Statement(
+		new PropertyValueSnak(
+            PropertyId::newFromNumber( trim($property_id, 'P') ),
+            typecastDataForProperty($property_id, $value, $language)
+        ),
+		null,
+		$refList,
+		null
+	);
+
+	return $statement;
 }
 
 /**
