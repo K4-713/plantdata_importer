@@ -215,7 +215,6 @@ function importDataFromFile( $file, $offset = false ){
 				}
 			}
 			
-			
 			if ( !empty($statements) ) {
 				//edit!
 				$added_statements = addStatementsToItemObject($editing_item, $statements);
@@ -315,7 +314,7 @@ function mapColumnHeaders($headers){
 	//now, we know what to do with that primary column. Go through all the others.
 	
 	foreach ($headers as $rownum => $header){
-		if (!is_array($return[$rownum])){
+		if (!is_array($return[$rownum]) && ($return[$rownum] !== 'ignore')){
 			//find out what property to map to
 			$ask = "What should we do with column '$header'?";
 			echolog($ask);
@@ -352,11 +351,30 @@ function mapColumnHeaders($headers){
 			}
 			
 			//language?
+			//oh hey, look at that. I think I can get the data type of the item to figure that out now.
+			//TODO: Get rid of this ask, and just go ahead and know if they need a language or not.
 			$ask = "Is column '$header' language-specific?";
 			if (getUserYN($ask)) {
-				$ask = "What language is the data in column '$header'?";
-				$lang = getUserLanguageChoice($ask);
-				$return[$rownum]['lang'] = $lang;
+				$ask = "Same language for the whole file, or specified in another column?";
+				$choices = array(
+					'0' => 'Single language for whole column',
+					'1' => 'Get language from another column',
+				);
+				$choice = getUserChoice($ask, $choices);
+				switch ($choice) {
+					case 0: 
+						$ask = "What language is the data in column '$header'?";
+						$lang = getUserLanguageChoice($ask);
+						$return[$rownum]['lang'] = $lang;
+						break;
+					case 1:
+						$ask = "What column contains the language for '$header'?";
+						$lang_column = getUserChoice($ask, $headers);
+						//$return[$rownum]['lang'] = $lang;
+						$return[$lang_column] = "ignore";
+						$return[$rownum]['lang'] = "Column $lang_column";
+						break;
+				}
 			}
 
 			$ask = "Use regular expression against column '$header'?";
@@ -672,7 +690,12 @@ function getStatementArrayFromDataLine($linedata, $mapping, $primary_matching_co
 				$property_id = $mapping[$column]['id'];
 				$language = false;
 				if( array_key_exists('lang', $mapping[$column])){
-					$language = $mapping[$column]['lang'];
+					if (strpos($mapping[$column]['lang'], 'Column') === 0){
+						$langsplode = explode(' ', $mapping[$column]['lang']);
+						$language = $linedata[$langsplode[1]];
+					} else {
+						$language = $mapping[$column]['lang'];
+					}
 				}
 
 				if( array_key_exists('regex', $mapping[$column])){
