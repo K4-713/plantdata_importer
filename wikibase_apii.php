@@ -195,7 +195,6 @@ function editAddStatementsToItem($item_id, $statements){
 		//check to see if the statements already exist.
 		foreach ($statements as $i => $statement_data){
 			$property_id = $statement_data['property_id'];
-			
 			//get the proeprty statements that exist on this item. Unset if
 			//there is an exact match.
 			
@@ -422,13 +421,13 @@ function testReferenceSetter(){
  */
 function typecastDataForProperty($property_id, $data, $language = false){
 	//first, look up what kind of data the property wants.
-	$property = getProperty($property_id);
-	$data_type_id = $property->getDataTypeId();
+	$data_type_id = getPropertyTypeID($property_id);
 	//echolog("$data_type_id is the data type ID for $property_id");
 	//then, stuff the data into the right class and return it.
 	
 	$obj = null;
 	switch( $data_type_id ){
+		case 'commonsMedia':
 		case 'external-id':
 		case 'url':
 		case 'string':
@@ -530,6 +529,11 @@ function getProperty($property_id, $refresh = false){
 	$property = $propertyLookup->getPropertyForId($propId_Obj);
 	$retrieved[$property_id] = $property;
 	return $property;
+}
+
+function getPropertyTypeID($property_id){
+	$property = getProperty($property_id);
+	return $property->getDataTypeId();
 }
 
 /**

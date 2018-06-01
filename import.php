@@ -112,7 +112,7 @@ function importDataFromFile( $file, $offset = false ){
 	//...and, some statements that should apply to all the lines, as if we added
 	//another column to the import file
 	$import_statements = getConfig('import_statements');
-	if (!is_array( $import_statements ) || empty( $import_statements )){
+	if ((!is_array( $import_statements ) || empty( $import_statements )) && ($import_statements !== false)){
 		$import_statements = defineImportStatements();
 		echolog("Import statements for config file is as follows:");
 		echolog(var_export($import_statements, true));
@@ -125,11 +125,15 @@ function importDataFromFile( $file, $offset = false ){
 	//find the primary matching column
 	$primary_matching_column = false;
 	foreach ( $mapping as $column => $information ){
+		if( $information === 'ignore' ){
+			continue;
+		}
 		if (array_key_exists('primary', $information) && $information['primary'] === true ){
 			$primary_matching_column = $column;
-			break;
+			continue;
 		}
 	}
+	
 	$primary_matching_type = $mapping[$primary_matching_column]['type'];
 	$primary_matching_language = $mapping[$primary_matching_column]['lang'];
 	
@@ -163,6 +167,9 @@ function importDataFromFile( $file, $offset = false ){
 					if( !is_array($matches) ){
 						//pick it up.
 						$editing_item = getItem($matches);
+						if($editing_item){
+							$message = "Found existing item '" . $data[$i][$primary_matching_column] . "'. ";
+						}
 					} else {
 						echolog("Found too many matches! Not sure what to do about this...");
 						echolog($matches);
@@ -185,37 +192,29 @@ function importDataFromFile( $file, $offset = false ){
 			} else {
 				$statements = array();
 			}
-			foreach( $data[$i] as $column => $value ){
-				if ($column === $primary_matching_column) {
-					//no stuff to do.
-					break;
+			
+			$line_statements = getStatementArrayFromDataLine($data[$i], $mapping, $primary_matching_column);
+			if( is_array($line_statements) ){
+				$statements = array_merge($statements, $line_statements);
+			}
+			
+			//line-squashing: Looking for more statements in this file that 
+			//apply to the $editing_item
+			//Is this kills performance, I'll just wrap this loop in a setting.
+			for( $j=$i+1; $j< count($data); ++$j ){
+				$lines = 0;
+				if( $data[$j][$primary_matching_column] === $data[$i][$primary_matching_column] ){
+					$line_statements = getStatementArrayFromDataLine($data[$j], $mapping, $primary_matching_column);
+					if( is_array($line_statements) ){
+						$statements = array_merge($statements, $line_statements);
+						++$lines;
+					}
 				}
-
-				//stuff to do!
-				$column_type = $mapping[$column]['type'];
-				switch($column_type){
-					case 'property':
-						$property_id = $mapping[$column]['id'];
-						$language = false;
-						if( array_key_exists('lang', $mapping[$column])){
-							$language = $mapping[$column]['lang'];
-						}
-
-						if( array_key_exists('regex', $mapping[$column])){
-							$value = getFirstRegexMatch($value, $mapping[$column]['regex']);
-						}
-						
-						$statements[] =array(
-							'property_id' => $property_id,
-							'value' => $value,
-							'language' => $language
-						);
-						break;
-					default:
-						echolog("Sorry, I haven't handled column type '$column_type' yet. Exiting.");
-						die();
+				if($lines > 0){
+					$message .= "Collapsing $lines additional lines. ";
 				}
 			}
+			
 			
 			if ( !empty($statements) ) {
 				//edit!
@@ -655,6 +654,54 @@ function getConfig($varname){
 		return null;
 	}
 	return $$varname;
+}
+
+
+function getStatementArrayFromDataLine($linedata, $mapping, $primary_matching_column){
+	$statements = array();
+	foreach( $linedata as $column => $value ){
+		if (($column === $primary_matching_column) || $mapping[$column] === 'ignore') {
+			//no stuff to do.
+			continue;
+		}
+
+		//stuff to do!
+		$column_type = $mapping[$column]['type'];
+		switch($column_type){
+			case 'property':
+				$property_id = $mapping[$column]['id'];
+				$language = false;
+				if( array_key_exists('lang', $mapping[$column])){
+					$language = $mapping[$column]['lang'];
+				}
+
+				if( array_key_exists('regex', $mapping[$column])){
+					$value = getFirstRegexMatch($value, $mapping[$column]['regex']);
+				}
+				
+				$property_type_id = getPropertyTypeID($property_id);
+
+				//TODO: Move to its own function.
+				if ($property_type_id === 'commonsMedia'){
+					$value = urldecode($value);
+				}
+
+				$statements[] =array(
+					'property_id' => $property_id,
+					'value' => $value,
+					'language' => $language
+				);
+				break;
+			default:
+				echolog("Sorry, I haven't handled column type '$column_type' yet. Exiting. " . __FUNCTION__);
+				die();
+		}
+	}
+	
+	if( empty($statements) ){
+		return false;
+	}
+	return $statements;
 }
 
 /**

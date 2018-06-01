@@ -69,6 +69,11 @@ function getWikibaseEntsByLabel( $text, $language, $type = 'item', $exact_match 
 	//if we're running with exact match, filter out the ones that are not exact
 	//after you ucase both sides.
 	if($exact_match){
+		//sometimes, there's no data here. Want to log what's going on...
+		if((!array_key_exists('search', $data)) || !is_array($data['search']) ){
+			echolog("PROBLEM: No valid search key in data array. " . __FUNCTION__ . " Data array follows...");
+			echolog($data);
+		}
 		foreach ( $data['search'] as $ind => $arr ){
 			if ( strtoupper($text) != strtoupper($arr['label']) ){
 				unset($data['search'][$ind]);
