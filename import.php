@@ -145,6 +145,12 @@ function importDataFromFile( $file, $offset = false ){
 	for ($i=1; ($i < sizeof($data)) && (!$stop); ++$i){
 		//check the primary column for data to match against in the live instance.
 		//For every column we should have a type = [item|property|ID], and lang
+
+		//check to see if we've handled this one already via line-squashing
+		$handled = array();
+		if ( array_key_exists($i, $handled) ){
+			continue;
+		}
 		
 		$editing = false;
 		$message = '';
@@ -186,6 +192,10 @@ function importDataFromFile( $file, $offset = false ){
 		
 		//if we have something to keep editing in the remaining columns...
 		if ($editing_item !== false){
+			
+			//handle alt labels (AliasGroups) and Descriptions hereish.
+			
+			
 			//time to add statements! woopwoop
 			if (is_array($import_statements)){
 				$statements = $import_statements;
@@ -212,6 +222,9 @@ function importDataFromFile( $file, $offset = false ){
 				}
 				if($lines > 0){
 					$message .= "Collapsing $lines additional lines. ";
+					
+					//stop us from reprocessing when we get to the actual line in the main loop.
+					$handled[$j] = true;
 				}
 			}
 			
@@ -315,39 +328,56 @@ function mapColumnHeaders($headers){
 	
 	foreach ($headers as $rownum => $header){
 		if (!is_array($return[$rownum]) && ($return[$rownum] !== 'ignore')){
-			//find out what property to map to
-			$ask = "What should we do with column '$header'?";
-			echolog($ask);
+			//find out what's in this column
+			$ask = "What kind of data does column '$header' map to?";
+			$choices = array(
+				'0' => "Property value",
+				'1' => "Item Description",
+				'2' => "Item Alternate Label (AKA)",
+				'3' => "Ignore Column '$header'",
+			);
 			
-			$mapme = readline("Enter a property label, property ID, or 'Ignore': ");
+			$choice = getUserChoice($ask, $choices);
 			
-			if ( strtoupper($mapme) === "IGNORE" || strtoupper($mapme) === "I"){
-				echolog("Ignoring column '$header'");
-				$return[$rownum] = "ignore";
-				continue;
-			}
-			
-			//look up the property label or ID, verify it exists, and save the ID
-			if ( (strpos($mapme, 'P') === 0 ) && (is_numeric(trim($mapme, "P"))) ){
-				//that there is an ID.
-				$entity = getWikibaseEntsByID($mapme, 'en');
-				echolog("Found property labeled '$entity' for id '$mapme'");
-				$return[$rownum] = array(
-					'column_name' => $header,
-					'type' => 'property',
-					'id' => $mapme,
-				);
-			} else {
-				//looking up text
-				$entity = getWikibaseEntsByLabel($mapme, 'en', 'property', true);
-				//potential problem: This can return multiple results.
-				//TODO: If it's an array, ask the user which one they mean.
-				echolog("Found property id '$entity' for label '$mapme'");
-				$return[$rownum] = array(
-					'column_name' => $header,
-					'type' => 'property',
-					'id' => $entity,
-				);
+			switch($choice){
+				case 0: //property
+					$entity= false;
+					//TODO: Move to its own function
+					while( $entity === false){
+						$ask = "Enter a property ID for column '$header'";
+						$mapme = readLine($ask . " ");
+
+						//look up the property ID, verify it exists, and save the ID
+						$entity = getWikibaseEntsByID($mapme, 'en');
+
+						if($entity === false){
+							echolog("Property ID '$mapme' not found.");
+						}
+						echolog("Found property labeled '$entity' for id '$mapme'");
+						$return[$rownum] = array(
+							'column_name' => $header,
+							'type' => 'property',
+							'id' => $mapme,
+						);
+					}
+					
+					break;
+				case 1: //Item description
+					$return[$rownum] = array(
+						'column_name' => $header,
+						'type' => 'description',
+					);
+					break;
+				case 2:	//Item AKA
+					$return[$rownum] = array(
+						'column_name' => $header,
+						'type' => 'altlabel',
+					);
+					break;
+				case 3:
+					echolog("Ignoring column '$header'");
+					$return[$rownum] = "ignore";
+					continue;
 			}
 			
 			//language?
