@@ -257,8 +257,7 @@ function addStatementsToItemObject(&$itemObj, $statements){
 	if ($count > 0){
 		//check to see if the statements already exist.
 		foreach ($statements as $i => $statement_data){
-			if(!array_key_exists('property_id', $statement_data)){
-				unset($statements[$i]);
+			if (!array_key_exists('property_id', $statement_data)) {
 				continue;
 			}
 			$property_id = $statement_data['property_id'];
@@ -286,6 +285,9 @@ function addStatementsToItemObject(&$itemObj, $statements){
 	
 	$count = 0;
 	foreach ($statements as $i => $statement_data){
+		if (!array_key_exists('property_id', $statement_data)) {
+			continue;
+		}
 		//add statements.
 		$property_id = $statement_data['property_id'];
 		$value = $statement_data['value'];
@@ -304,6 +306,10 @@ function addStatementsToItemObject(&$itemObj, $statements){
 		++$count;
 	}
 	
+	if ($count === 0){
+		return false;
+	}
+		
 	$itemObj->setStatements($statementList);
 	return $count;
 	

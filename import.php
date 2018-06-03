@@ -142,12 +142,12 @@ function importDataFromFile( $file, $offset = false ){
 	
 	$edits = 0;
 	$stop = false;
+	//check to see if we've handled this one already via line-squashing
+	$handled = array();
 	for ($i=1; ($i < sizeof($data)) && (!$stop); ++$i){
 		//check the primary column for data to match against in the live instance.
 		//For every column we should have a type = [item|property|ID], and lang
 
-		//check to see if we've handled this one already via line-squashing
-		$handled = array();
 		if ( array_key_exists($i, $handled) ){
 			continue;
 		}
