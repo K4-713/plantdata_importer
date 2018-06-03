@@ -293,7 +293,14 @@ function addStatementsToItemObject(&$itemObj, $statements){
 		if(array_key_exists('language', $statement_data)){
 			$language = $statement_data['language'];
 		}
-		$statementList->addStatement(createStatementObject($property_id, $value, $language));
+		try {
+			$statementList->addStatement(createStatementObject($property_id, $value, $language));
+		} catch (Exception $e) {
+			echolog("Could not add statement for the following statement data:");
+			echolog($statement_data);
+			echolog('Caught ErrorException: ' . $e->getMessage(), true);
+			throw $e;
+		}
 		++$count;
 	}
 	
@@ -324,7 +331,7 @@ function addAliasesToItemObject(&$itemObj, $statements){
 		if ($aliasGroups->hasGroupForLanguage($statement_data['language'])){
 			$aliases = $aliasGroups->getByLanguage($statement_data['language'])->getAliases();
 			foreach ($aliases as $j => $alias_string){
-				if ($statement_data['altlabel'] === $alias_string){
+				if (strtoupper($statement_data['altlabel']) === strtoupper($alias_string)){
 					$found = true;
 				}
 			}
@@ -384,9 +391,9 @@ function createStatementObject($property_id, $value, $language){
 	
 	$statement = new Statement(
 		new PropertyValueSnak(
-            PropertyId::newFromNumber( trim($property_id, 'P') ),
-            typecastDataForProperty($property_id, $value, $language)
-        ),
+			PropertyId::newFromNumber( trim($property_id, 'P') ),
+			typecastDataForProperty($property_id, $value, $language)
+		),
 		null,
 		$refList,
 		null
