@@ -211,8 +211,9 @@ function importDataFromFile( $file, $offset = false ){
 			//line-squashing: Looking for more statements in this file that 
 			//apply to the $editing_item
 			//Is this kills performance, I'll just wrap this loop in a setting.
+			
+			$lines = 0;
 			for( $j=$i+1; $j< count($data); ++$j ){
-				$lines = 0;
 				if( $data[$j][$primary_matching_column] === $data[$i][$primary_matching_column] ){
 					$line_statements = getStatementArrayFromDataLine($data[$j], $mapping, $primary_matching_column);
 					if( is_array($line_statements) ){
