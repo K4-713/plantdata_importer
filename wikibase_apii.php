@@ -257,6 +257,10 @@ function addStatementsToItemObject(&$itemObj, $statements){
 	if ($count > 0){
 		//check to see if the statements already exist.
 		foreach ($statements as $i => $statement_data){
+			if(!array_key_exists('property_id', $statement_data)){
+				unset($statements[$i]);
+				continue;
+			}
 			$property_id = $statement_data['property_id'];
 			
 			//get the proeprty statements that exist on this item. Unset if
@@ -296,6 +300,50 @@ function addStatementsToItemObject(&$itemObj, $statements){
 	$itemObj->setStatements($statementList);
 	return $count;
 	
+}
+
+/**
+ * 
+ * @param Item $itemObj
+ * @param array $statements
+ * @return boolean|int
+ */
+function addAliasesToItemObject(&$itemObj, $statements){
+	//grab the existing statements on this item
+	$aliasGroups = $itemObj->getAliasGroups();
+	
+	$new_alias_count = 0;
+	//check to see if the aliases already exist in that language
+	foreach ($statements as $i => $statement_data){
+		if(!array_key_exists('altlabel', $statement_data)){
+			continue;
+		}
+
+		$found = false;
+		$aliases = array();
+		if ($aliasGroups->hasGroupForLanguage($statement_data['language'])){
+			$aliases = $aliasGroups->getByLanguage($statement_data['language'])->getAliases();
+			foreach ($aliases as $j => $alias_string){
+				if ($statement_data['altlabel'] === $alias_string){
+					$found = true;
+				}
+			}
+		}
+
+		if(!$found){
+			//add the thing (possibly to the other thing to avoid destroying things)
+			$aliases[] = $statement_data['altlabel'];
+
+			$itemObj->setAliases($statement_data['language'], $aliases);
+			++$new_alias_count;
+		}
+	}
+	
+	if($new_alias_count === 0){
+		return false;
+	}
+
+	return $new_alias_count;
 }
 
 /**

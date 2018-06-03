@@ -192,10 +192,6 @@ function importDataFromFile( $file, $offset = false ){
 		
 		//if we have something to keep editing in the remaining columns...
 		if ($editing_item !== false){
-			
-			//handle alt labels (AliasGroups) and Descriptions hereish.
-			
-			
 			//time to add statements! woopwoop
 			if (is_array($import_statements)){
 				$statements = $import_statements;
@@ -203,7 +199,7 @@ function importDataFromFile( $file, $offset = false ){
 				$statements = array();
 			}
 			
-			$line_statements = getStatementArrayFromDataLine($data[$i], $mapping, $primary_matching_column);
+			$line_statements = getParsedItemArrayFromDataLine($data[$i], $mapping, $primary_matching_column);
 			if( is_array($line_statements) ){
 				$statements = array_merge($statements, $line_statements);
 			}
@@ -215,7 +211,7 @@ function importDataFromFile( $file, $offset = false ){
 			$lines = 0;
 			for( $j=$i+1; $j< count($data); ++$j ){
 				if( $data[$j][$primary_matching_column] === $data[$i][$primary_matching_column] ){
-					$line_statements = getStatementArrayFromDataLine($data[$j], $mapping, $primary_matching_column);
+					$line_statements = getParsedItemArrayFromDataLine($data[$j], $mapping, $primary_matching_column);
 					if( is_array($line_statements) ){
 						$statements = array_merge($statements, $line_statements);
 						++$lines;
@@ -233,8 +229,12 @@ function importDataFromFile( $file, $offset = false ){
 				//edit!
 				$added_statements = addStatementsToItemObject($editing_item, $statements);
 				if ( $added_statements !== false){
-					//do the edit.
 					$message .= "$added_statements new statements added. ";
+					$editing = true;
+				}
+				$added_aliases = addAliasesToItemObject($editing_item, $statements);
+				if ( $added_aliases !== false){
+					$message .= "$added_aliases aliases added. ";
 					$editing = true;
 				}
 			}
@@ -712,12 +712,26 @@ function getConfig($varname){
 }
 
 
-function getStatementArrayFromDataLine($linedata, $mapping, $primary_matching_column){
+function getParsedItemArrayFromDataLine($linedata, $mapping, $primary_matching_column){
 	$statements = array();
 	foreach( $linedata as $column => $value ){
 		if (($column === $primary_matching_column) || $mapping[$column] === 'ignore') {
 			//no stuff to do.
 			continue;
+		}
+		
+		$language = false;
+		if( array_key_exists('lang', $mapping[$column])){
+			if (strpos($mapping[$column]['lang'], 'Column') === 0){
+				$langsplode = explode(' ', $mapping[$column]['lang']);
+				$language = $linedata[$langsplode[1]];
+			} else {
+				$language = $mapping[$column]['lang'];
+			}
+		}
+		
+		if( array_key_exists('regex', $mapping[$column])){
+			$value = getFirstRegexMatch($value, $mapping[$column]['regex']);
 		}
 
 		//stuff to do!
@@ -725,20 +739,6 @@ function getStatementArrayFromDataLine($linedata, $mapping, $primary_matching_co
 		switch($column_type){
 			case 'property':
 				$property_id = $mapping[$column]['id'];
-				$language = false;
-				if( array_key_exists('lang', $mapping[$column])){
-					if (strpos($mapping[$column]['lang'], 'Column') === 0){
-						$langsplode = explode(' ', $mapping[$column]['lang']);
-						$language = $linedata[$langsplode[1]];
-					} else {
-						$language = $mapping[$column]['lang'];
-					}
-				}
-
-				if( array_key_exists('regex', $mapping[$column])){
-					$value = getFirstRegexMatch($value, $mapping[$column]['regex']);
-				}
-				
 				$property_type_id = getPropertyTypeID($property_id);
 
 				//TODO: Move to its own function.
@@ -749,6 +749,13 @@ function getStatementArrayFromDataLine($linedata, $mapping, $primary_matching_co
 				$statements[] =array(
 					'property_id' => $property_id,
 					'value' => $value,
+					'language' => $language
+				);
+				break;
+			case 'altlabel':
+			case 'description':
+				$statements[] =array(
+					$column_type => $value,
 					'language' => $language
 				);
 				break;
