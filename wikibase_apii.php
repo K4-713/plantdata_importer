@@ -151,6 +151,14 @@ function createItemObject( $label, $language ){
 	return $newItem;
 }
 
+/**
+ * Adds the item to the instance of wikibase specified in config.
+ * THIS FUNCTION DOES PERFORM LIVE EDITS
+ * @staticvar RevisionSaver $saver 
+ * @param Item $itemObj
+ * @return string|boolean The saved item's ID, or false
+ * @throws Exception Passes on exception thrown by the Wikibase-api
+ */
 function editAddItemObject( $itemObj ){
 	static $saver = null;
 	if (is_null($saver)){
@@ -161,7 +169,13 @@ function editAddItemObject( $itemObj ){
 		new ItemContent( $itemObj )
 	);
 	stopwatch('RevisionSaver Save');
-	$resultingItem = $saver->save( $edit, getEditSummaryFromConfig() );
+	try {
+		$resultingItem = $saver->save( $edit, getEditSummaryFromConfig() );
+	} catch (Exception $e) {
+		stopwatch('RevisionSaver Save');
+		echolog('Could not save new item. ' . $e->getMessage(), true);
+		throw $e;
+	}
 	stopwatch('RevisionSaver Save');
 
 	// You can get the ItemId object of the created item by doing the following
@@ -552,6 +566,11 @@ function getItem($item_id, $refresh = false){
 	static $retrieved = array();
 	if ( ($refresh === false) && (array_key_exists($item_id, $retrieved)) ){
 		return $retrieved[$item_id];
+	}
+	
+	//Not wasting bandwidth is great, but Items can get big.
+	while(count($retrieved) > 500){
+		array_shift($retrieved);
 	}
 	
 	$itemLookup = getWikibaseFactory()->newItemLookup();

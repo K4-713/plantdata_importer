@@ -218,14 +218,14 @@ function importDataFromFile( $file, $offset = false ){
 					if( is_array($line_statements) ){
 						$statements = array_merge($statements, $line_statements);
 						++$lines;
+						$handled[$j] = true;
 					}
 				}
-				if($lines > 0){
-					$message .= "Collapsing $lines additional lines. ";
-					
-					//stop us from reprocessing when we get to the actual line in the main loop.
-					$handled[$j] = true;
-				}
+			}
+			
+			if($lines > 0){
+				$message .= "Collapsing $lines additional lines. ";
+				//stop us from reprocessing when we get to the actual line in the main loop.
 			}
 			
 			if ( !empty($statements) ) {
@@ -240,7 +240,13 @@ function importDataFromFile( $file, $offset = false ){
 		}
 		
 		if($editing){
-			$item_id = editAddItemObject($editing_item);
+			try {
+				$item_id = editAddItemObject($editing_item);
+			} catch (Exception $e){
+				echolog("SKIPPING Item '" . $data[$i][$primary_matching_column] . "': Errors on save. See logs for more information." );
+				//TODO: Consider adding the skips to yet another output file for ease of... something.
+				continue;
+			}
 			echolog("$item_id: $message");
 			++$edits;
 		}
