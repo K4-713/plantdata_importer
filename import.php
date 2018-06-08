@@ -210,7 +210,7 @@ function importDataFromFile( $file, $offset = false ){
 			
 			$lines = 0;
 			for( $j=$i+1; $j< count($data); ++$j ){
-				if( $data[$j][$primary_matching_column] === $data[$i][$primary_matching_column] ){
+				if( strtoupper($data[$j][$primary_matching_column]) === strtoupper($data[$i][$primary_matching_column] )){
 					$line_statements = getParsedItemArrayFromDataLine($data[$j], $mapping, $primary_matching_column);
 					if( is_array($line_statements) ){
 						$statements = array_merge($statements, $line_statements);

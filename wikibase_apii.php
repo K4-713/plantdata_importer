@@ -334,11 +334,24 @@ function addAliasesToItemObject(&$itemObj, $statements){
 
 		$found = false;
 		$aliases = array();
-		if ($aliasGroups->hasGroupForLanguage($statement_data['language'])){
-			$aliases = $aliasGroups->getByLanguage($statement_data['language'])->getAliases();
-			foreach ($aliases as $j => $alias_string){
-				if (strtoupper($statement_data['altlabel']) === strtoupper($alias_string)){
-					$found = true;
+		
+		//I'm not entirely sure this is a permanent good idea, but I need it now
+		// and I can always take this out and dupe the heck out of the label
+		//  space later if there's a good reason.
+		$allLabels = $itemObj->getLabels()->toTextArray();
+		echolog ($allLabels);
+		foreach($allLabels as $langkey => $labelval) { //language indiscriminate
+			if( strtoupper($statement_data['altlabel']) === strtoupper($labelval) ){
+				$found = true;
+			}
+		}
+		if (!$found){
+			if ($aliasGroups->hasGroupForLanguage($statement_data['language'])){
+				$aliases = $aliasGroups->getByLanguage($statement_data['language'])->getAliases();
+				foreach ($aliases as $j => $alias_string){
+					if (strtoupper($statement_data['altlabel']) === strtoupper($alias_string)){
+						$found = true;
+					}
 				}
 			}
 		}
@@ -346,6 +359,13 @@ function addAliasesToItemObject(&$itemObj, $statements){
 		if(!$found){
 			//add the thing (possibly to the other thing to avoid destroying things)
 			$aliases[] = $statement_data['altlabel'];
+			
+			foreach ($aliases as $key => $val){
+				ucwords($val);
+			}
+			
+			$aliases = array_unique($aliases);
+			sort($aliases); //don't you just love php inconsistencies. (Like I'm any better...)
 
 			$itemObj->setAliases($statement_data['language'], $aliases);
 			++$new_alias_count;
@@ -355,7 +375,7 @@ function addAliasesToItemObject(&$itemObj, $statements){
 	if($new_alias_count === 0){
 		return false;
 	}
-
+		
 	return $new_alias_count;
 }
 
