@@ -339,7 +339,6 @@ function addAliasesToItemObject(&$itemObj, $statements){
 		// and I can always take this out and dupe the heck out of the label
 		//  space later if there's a good reason.
 		$allLabels = $itemObj->getLabels()->toTextArray();
-		echolog ($allLabels);
 		foreach($allLabels as $langkey => $labelval) { //language indiscriminate
 			if( strtoupper($statement_data['altlabel']) === strtoupper($labelval) ){
 				$found = true;
